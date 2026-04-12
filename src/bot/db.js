@@ -13,6 +13,7 @@ db.exec(`
 
 const stmtIsVerified = db.prepare('SELECT 1 FROM verified_users WHERE discord_id = ?');
 const stmtGetByEmail = db.prepare('SELECT * FROM verified_users WHERE email = ?');
+const stmtGetByDiscordId = db.prepare('SELECT * FROM verified_users WHERE discord_id = ?');
 const stmtAddVerified = db.prepare(
   'INSERT OR IGNORE INTO verified_users (discord_id, email, verified_at) VALUES (?, ?, ?)'
 );
@@ -25,8 +26,12 @@ function getByEmail(email) {
   return stmtGetByEmail.get(email);
 }
 
+function getByDiscordId(discordId) {
+  return stmtGetByDiscordId.get(discordId);
+}
+
 function addVerified(discordId, email) {
   return stmtAddVerified.run(discordId, email, Date.now());
 }
 
-module.exports = { isVerified, getByEmail, addVerified };
+module.exports = { isVerified, getByEmail, getByDiscordId, addVerified };
