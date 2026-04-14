@@ -29,6 +29,18 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'whois',
+    description: 'Look up what UMN email a user verified with (mods only)',
+    options: [
+      {
+        type: 6, // USER
+        name: 'user',
+        description: 'The Discord user to look up',
+        required: true,
+      },
+    ],
+  },
 ];
 
 const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);

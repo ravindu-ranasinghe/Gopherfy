@@ -107,6 +107,30 @@ client.on('interactionCreate', async (interaction) => {
 
     return interaction.reply({ content: 'Verified! Welcome to the server.', flags: MessageFlags.Ephemeral });
   }
+
+  if (commandName === 'whois') {
+    if (!interaction.memberPermissions.has('ManageGuild')) {
+      return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+    }
+
+    const target = interaction.options.getUser('user');
+    const row = db.getByDiscordId(target.id);
+
+    if (!row) {
+      return interaction.reply({ content: `❌ <@${target.id}> is not verified.`, flags: MessageFlags.Ephemeral });
+    }
+
+    const x500 = row.email.split('@')[0];
+    const verifiedAt = new Date(row.verified_at).toLocaleString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    });
+
+    return interaction.reply({
+      content: `🔍 **User:** <@${target.id}>\n📧 **Email:** ${row.email}\n🪪 **x500:** ${x500}\n✅ **Verified:** ${verifiedAt}`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 });
 
 client.login(DISCORD_TOKEN);
