@@ -13,13 +13,29 @@ const {
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
-const db = require('./db');
+const {
+  isVerified,
+  getByEmail,
+  getByDiscordId,
+  addVerified,
+  getGuildConfig,
+  setGuildConfig,
+} = require('./db');
 
-const { DISCORD_TOKEN, VERIFIED_ROLE_ID, UNVERIFIED_ROLE_ID, OTP_SERVICE_URL = 'http://localhost:3001' } = process.env;
+const { DISCORD_TOKEN, OTP_SERVICE_URL = 'http://localhost:3001' } = process.env;
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 });
+
+async function applyGuildVerificationRoles(member, config) {
+  try {
+    await member.roles.add(config.verified_role_id);
+  } catch (err) {
+    console.error('Role assignment failed:', err);
+    throw err;
+  }
+}
 
 function setVerificationPresence() {
   client.user.setPresence({
@@ -27,7 +43,7 @@ function setVerificationPresence() {
     activities: [
       {
         // Discord activity names don't support Markdown bold; use Unicode bold letters instead.
-        name: '𝗩𝗲𝗿𝗶𝗳𝘆𝗶𝗻𝗴 𝗚𝗼𝗽𝗵𝗲𝗿𝘀 𝗼𝗻 𝗗𝗶𝘀𝗰𝗼𝗿𝗱!',
+        name: '𝗚𝗼𝗽𝗵𝗲𝗿𝗳𝘆 — verifying @umn.edu',
         type: ActivityType.Watching,
       },
     ],
@@ -43,11 +59,11 @@ client.on('shardResume', () => {
   setVerificationPresence();
 });
 
-client.on('guildMemberAdd', (member) => {
-  if (db.isVerified(member.id)) {
-    member.roles.add(VERIFIED_ROLE_ID).catch(() => {});
-  } else {
-    member.roles.add(UNVERIFIED_ROLE_ID).catch(() => {});
+client.on('guildMemberAdd', async (member) => {
+  const config = getGuildConfig(member.guild.id);
+  if (!config) return;
+  if (isVerified(member.id)) {
+    member.roles.add(config.verified_role_id).catch(() => {});
   }
 });
 
@@ -56,6 +72,42 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isChatInputCommand()) {
       const { commandName, user } = interaction;
       const userId = user.id;
+      const config = interaction.guild ? getGuildConfig(interaction.guild.id) : null;
+
+      if (commandName !== 'setup' && !config) {
+        return interaction.reply({
+          content: '⚠️ This server hasn\'t been configured yet. Ask an admin to run `/setup` first.',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
+      if (commandName === 'setup') {
+        if (!interaction.memberPermissions.has('Administrator')) {
+          return interaction.reply({
+            content: '❌ Only server administrators can run `/setup`.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        const verifiedRole = interaction.options.getRole('verified-role');
+        const botMember = await interaction.guild.members.fetchMe();
+        const botHighest = botMember.roles.highest.position;
+
+        if (verifiedRole.position >= botHighest) {
+          return interaction.reply({
+            content: '❌ The bot\'s role must be above the selected verified role in the server\'s role list. Please drag the bot\'s role higher and try again.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        // Keep DB compatibility: legacy unverified role column is no longer used.
+        setGuildConfig(interaction.guild.id, verifiedRole.id, verifiedRole.id);
+
+        return interaction.reply({
+          content: `✅ **Setup complete!**\n- Verified role: <@&${verifiedRole.id}>\n- Everyone else remains under \`@everyone\` permissions until verified.\n\nPost a verification panel with \`/verify-panel\``,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
 
       if (commandName === 'verify-panel') {
         if (!interaction.memberPermissions.has('ManageGuild')) {
@@ -64,9 +116,9 @@ client.on('interactionCreate', async (interaction) => {
 
         const embed = new EmbedBuilder()
           .setColor(Colors.DarkRed)
-          .setTitle('UMN Verification')
+          .setTitle('Gopherfy')
           .setDescription(
-            'This server uses a UMN email verification system.\n\n' +
+            '**Gopherfy** verifies **@umn.edu** addresses for this server.\n\n' +
               '1) Click **Start verification** and enter your **@umn.edu** email.\n' +
               '2) Check your inbox for a **6-digit code**.\n' +
               '3) Click **Submit code** and enter the code.'
@@ -81,15 +133,42 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       if (commandName === 'verify') {
-        const email = interaction.options.getString('email').trim().toLowerCase();
+        const emailOpt = interaction.options.getString('email');
+        const email = emailOpt ? emailOpt.trim().toLowerCase() : '';
 
-        if (!email.endsWith('@umn.edu')) {
+        const existingRow = getByDiscordId(userId);
+        if (existingRow) {
+          if (email && email !== existingRow.email) {
+            return interaction.reply({
+              content: `You have verified before with **${existingRow.email}**. Run \`/verify\` with no email, or use that same address.`,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+          const member = await interaction.guild.members.fetch(userId).catch(() => null);
+          if (!member) {
+            return interaction.reply({
+              content: `You have verified before! Thank you. (email: **${existingRow.email}**)\nCould not fetch your member record — contact a mod for roles.`,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+          try {
+            await applyGuildVerificationRoles(member, config);
+          } catch {
+            return interaction.reply({
+              content: `You have verified before! Thank you. (email: **${existingRow.email}**)\nRole assignment failed — contact a mod.`,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+          return interaction.reply({
+            content: `You have verified before! Thank you. (email: **${existingRow.email}**)`,
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        if (!email || !email.endsWith('@umn.edu')) {
           return interaction.reply({ content: 'Must be a @umn.edu address.', flags: MessageFlags.Ephemeral });
         }
-        if (db.isVerified(userId)) {
-          return interaction.reply({ content: 'You are already verified.', flags: MessageFlags.Ephemeral });
-        }
-        if (db.getByEmail(email)) {
+        if (getByEmail(email)) {
           return interaction.reply({ content: 'That email is already linked to another account.', flags: MessageFlags.Ephemeral });
         }
 
@@ -120,6 +199,29 @@ client.on('interactionCreate', async (interaction) => {
       if (commandName === 'code') {
         const input = interaction.options.getString('digits').trim();
 
+        if (isVerified(userId)) {
+          const row = getByDiscordId(userId);
+          const member = await interaction.guild.members.fetch(userId).catch(() => null);
+          if (!member) {
+            return interaction.reply({
+              content: `You are already verified. (email: **${row.email}**)\nCould not fetch your member record — contact a mod for roles.`,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+          try {
+            await applyGuildVerificationRoles(member, config);
+          } catch {
+            return interaction.reply({
+              content: `You are already verified. (email: **${row.email}**)\nRole assignment failed — contact a mod.`,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+          return interaction.reply({
+            content: `You are already verified. (email: **${row.email}**)`,
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
         let data;
         try {
           const res = await fetch(`${OTP_SERVICE_URL}/verify`, {
@@ -145,7 +247,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const { email } = data;
-        db.addVerified(userId, email);
+        addVerified(userId, email);
 
         const member = await interaction.guild.members.fetch(userId).catch(() => null);
         if (!member) {
@@ -153,13 +255,10 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         try {
-          await member.roles.add(VERIFIED_ROLE_ID);
-        } catch (err) {
-          console.error('Role assignment failed:', err);
+          await applyGuildVerificationRoles(member, config);
+        } catch {
           return interaction.reply({ content: 'Verified in DB but role assignment failed — contact a mod.', flags: MessageFlags.Ephemeral });
         }
-
-        member.roles.remove(UNVERIFIED_ROLE_ID).catch(() => {});
 
         return interaction.reply({ content: 'Verified! Welcome to the server.', flags: MessageFlags.Ephemeral });
       }
@@ -170,7 +269,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const target = interaction.options.getUser('user');
-        const row = db.getByDiscordId(target.id);
+        const row = getByDiscordId(target.id);
 
         if (!row) {
           return interaction.reply({ content: `❌ <@${target.id}> is not verified.`, flags: MessageFlags.Ephemeral });
@@ -193,7 +292,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton()) {
       if (interaction.customId === 'umn_verify_start') {
-        const modal = new ModalBuilder().setCustomId('umn_verify_email_modal').setTitle('UMN email');
+        const modal = new ModalBuilder().setCustomId('umn_verify_email_modal').setTitle('Gopherfy — UMN email');
 
         const emailInput = new TextInputBuilder()
           .setCustomId('umn_email')
@@ -234,10 +333,44 @@ client.on('interactionCreate', async (interaction) => {
         if (!email.endsWith('@umn.edu')) {
           return interaction.reply({ content: 'Must be a @umn.edu address.', flags: MessageFlags.Ephemeral });
         }
-        if (db.isVerified(userId)) {
-          return interaction.reply({ content: 'You are already verified.', flags: MessageFlags.Ephemeral });
+        const guildConfig = interaction.guild ? getGuildConfig(interaction.guild.id) : null;
+        if (interaction.guild && !guildConfig) {
+          return interaction.reply({
+            content: '⚠️ This server hasn\'t been configured yet. Ask an admin to run `/setup` first.',
+            flags: MessageFlags.Ephemeral,
+          });
         }
-        if (db.getByEmail(email)) {
+
+        const existingRow = getByDiscordId(userId);
+        if (existingRow) {
+          if (email !== existingRow.email) {
+            return interaction.reply({
+              content: `You have verified before with **${existingRow.email}**. Enter that same @umn.edu address, or ask a mod for help.`,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+          const member = await interaction.guild.members.fetch(userId).catch(() => null);
+          if (!member) {
+            return interaction.reply({
+              content: `You have verified before! Thank you. (email: **${existingRow.email}**)\nCould not fetch your member record — contact a mod for roles.`,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+          try {
+            await applyGuildVerificationRoles(member, guildConfig);
+          } catch {
+            return interaction.reply({
+              content: `You have verified before! Thank you. (email: **${existingRow.email}**)\nRole assignment failed — contact a mod.`,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+          return interaction.reply({
+            content: `You have verified before! Thank you. (email: **${existingRow.email}**)`,
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        if (getByEmail(email)) {
           return interaction.reply({ content: 'That email is already linked to another account.', flags: MessageFlags.Ephemeral });
         }
 
@@ -269,6 +402,37 @@ client.on('interactionCreate', async (interaction) => {
       if (interaction.customId === 'umn_verify_code_modal') {
         const input = interaction.fields.getTextInputValue('umn_code').trim();
 
+        const config = interaction.guild ? getGuildConfig(interaction.guild.id) : null;
+        if (!config) {
+          return interaction.reply({
+            content: '⚠️ This server hasn\'t been configured yet. Ask an admin to run `/setup` first.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        if (isVerified(userId)) {
+          const row = getByDiscordId(userId);
+          const member = await interaction.guild.members.fetch(userId).catch(() => null);
+          if (!member) {
+            return interaction.reply({
+              content: `You are already verified. (email: **${row.email}**)\nCould not fetch your member record — contact a mod for roles.`,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+          try {
+            await applyGuildVerificationRoles(member, config);
+          } catch {
+            return interaction.reply({
+              content: `You are already verified. (email: **${row.email}**)\nRole assignment failed — contact a mod.`,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+          return interaction.reply({
+            content: `You are already verified. (email: **${row.email}**)`,
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
         let data;
         try {
           const res = await fetch(`${OTP_SERVICE_URL}/verify`, {
@@ -294,7 +458,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const { email } = data;
-        db.addVerified(userId, email);
+        addVerified(userId, email);
 
         const member = await interaction.guild.members.fetch(userId).catch(() => null);
         if (!member) {
@@ -302,13 +466,10 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         try {
-          await member.roles.add(VERIFIED_ROLE_ID);
-        } catch (err) {
-          console.error('Role assignment failed:', err);
+          await applyGuildVerificationRoles(member, config);
+        } catch {
           return interaction.reply({ content: 'Verified in DB but role assignment failed — contact a mod.', flags: MessageFlags.Ephemeral });
         }
-
-        member.roles.remove(UNVERIFIED_ROLE_ID).catch(() => {});
 
         return interaction.reply({ content: 'Verified! Welcome to the server.', flags: MessageFlags.Ephemeral });
       }
