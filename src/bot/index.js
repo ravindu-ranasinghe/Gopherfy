@@ -22,7 +22,21 @@ const {
   setGuildConfig,
 } = require('./db');
 
-const { DISCORD_TOKEN, OTP_SERVICE_URL = 'http://localhost:3001' } = process.env;
+const {
+  DISCORD_TOKEN,
+  OTP_SERVICE_URL = 'http://localhost:3001',
+  OTP_SERVICE_KEY,
+} = process.env;
+
+if (!OTP_SERVICE_KEY) {
+  console.error('OTP_SERVICE_KEY missing — bot cannot authenticate to OTP service.');
+  process.exit(1);
+}
+
+const otpHeaders = {
+  'Content-Type': 'application/json',
+  Authorization: `Bearer ${OTP_SERVICE_KEY}`,
+};
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
@@ -177,7 +191,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
           const res = await fetch(`${OTP_SERVICE_URL}/send`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: otpHeaders,
             body: JSON.stringify({ discordId: userId, email }),
           });
           const data = await res.json();
@@ -226,7 +240,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
           const res = await fetch(`${OTP_SERVICE_URL}/verify`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: otpHeaders,
             body: JSON.stringify({ discordId: userId, code: input }),
           });
           data = await res.json();
@@ -239,6 +253,7 @@ client.on('interactionCreate', async (interaction) => {
             no_pending: 'No pending verification. Run `/verify` first.',
             expired: 'Code expired. Run `/verify` again.',
             wrong_code: 'Wrong code. Try again.',
+            too_many_attempts: 'Too many wrong codes. Run `/verify` again to get a new code.',
           };
           return interaction.reply({
             content: messages[data.reason] ?? 'Verification failed. Try again.',
@@ -379,7 +394,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
           const res = await fetch(`${OTP_SERVICE_URL}/send`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: otpHeaders,
             body: JSON.stringify({ discordId: userId, email }),
           });
           const data = await res.json();
@@ -437,7 +452,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
           const res = await fetch(`${OTP_SERVICE_URL}/verify`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: otpHeaders,
             body: JSON.stringify({ discordId: userId, code: input }),
           });
           data = await res.json();
@@ -450,6 +465,7 @@ client.on('interactionCreate', async (interaction) => {
             no_pending: 'No pending verification. Start verification again from the panel.',
             expired: 'Code expired. Start verification again from the panel.',
             wrong_code: 'Wrong code. Try again.',
+            too_many_attempts: 'Too many wrong codes. Start verification again from the panel.',
           };
           return interaction.reply({
             content: messages[data.reason] ?? 'Verification failed. Try again.',

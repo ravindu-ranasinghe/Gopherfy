@@ -1,37 +1,44 @@
 const crypto = require('crypto');
 
 const OTP_TTL = 10 * 60 * 1000;
-const MAX_ATTEMPTS = 3;
-const ATTEMPT_WINDOW = 60 * 60 * 1000;
+const MAX_SENDS = 3;
+const SEND_WINDOW = 60 * 60 * 1000;
+const MAX_VERIFY_ATTEMPTS = 5;
 
 const store = new Map();
-const attempts = new Map();
+const sendCounters = new Map();
 
 function generateCode() {
-  return String(crypto.randomInt(100000, 999999));
+  return String(crypto.randomInt(100000, 1000000)).padStart(6, '0');
 }
 
-function checkRateLimit(userId) {
+function pruneSendCounter(userId) {
+  const entry = sendCounters.get(userId);
+  if (entry && Date.now() >= entry.resetAt) {
+    sendCounters.delete(userId);
+    return null;
+  }
+  return entry || null;
+}
+
+function canSend(userId) {
+  const entry = pruneSendCounter(userId);
+  return !entry || entry.count < MAX_SENDS;
+}
+
+function commitSend(userId) {
   const now = Date.now();
-  const entry = attempts.get(userId);
-
-  if (!entry || now >= entry.resetAt) {
-    attempts.set(userId, { count: 1, resetAt: now + ATTEMPT_WINDOW });
-    return true;
+  const entry = pruneSendCounter(userId);
+  if (!entry) {
+    sendCounters.set(userId, { count: 1, resetAt: now + SEND_WINDOW });
+  } else {
+    entry.count += 1;
   }
-
-  if (entry.count >= MAX_ATTEMPTS) {
-    return false;
-  }
-
-  entry.count += 1;
-  return true;
 }
 
-function createOtp(userId, email) {
-  const code = generateCode();
+function storeOtp(userId, email, code) {
   const expiresAt = Date.now() + OTP_TTL;
-  store.set(userId, { code, email, expiresAt });
+  store.set(userId, { code, email, expiresAt, attempts: 0 });
 
   const timer = setTimeout(() => {
     const current = store.get(userId);
@@ -40,8 +47,6 @@ function createOtp(userId, email) {
     }
   }, OTP_TTL);
   timer.unref();
-
-  return code;
 }
 
 function validateOtp(userId, inputCode) {
@@ -55,7 +60,19 @@ function validateOtp(userId, inputCode) {
     return { ok: false, reason: 'expired' };
   }
 
-  if (entry.code !== inputCode) {
+  entry.attempts += 1;
+
+  const stored = Buffer.from(entry.code, 'utf8');
+  const provided = Buffer.from(inputCode, 'utf8');
+  const matches =
+    stored.length === provided.length &&
+    crypto.timingSafeEqual(stored, provided);
+
+  if (!matches) {
+    if (entry.attempts >= MAX_VERIFY_ATTEMPTS) {
+      store.delete(userId);
+      return { ok: false, reason: 'too_many_attempts' };
+    }
     return { ok: false, reason: 'wrong_code' };
   }
 
@@ -63,4 +80,10 @@ function validateOtp(userId, inputCode) {
   return { ok: true, email: entry.email };
 }
 
-module.exports = { generateCode, checkRateLimit, createOtp, validateOtp };
+module.exports = {
+  generateCode,
+  canSend,
+  commitSend,
+  storeOtp,
+  validateOtp,
+};
