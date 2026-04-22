@@ -4,7 +4,7 @@ A Discord verification bot that confirms a member owns a real `@umn.edu`
 email address, remembers them, and auto-assigns the "verified" role in
 any server running Gopherfy where that member shows up later.
 
-Built by **Eric He** and **Ravi Ranasinghe**.
+Built by **Eric He** and **Ravindu Ranasinghe**.
 
 ## What it does
 
@@ -137,4 +137,4 @@ code** buttons rather than the slash commands directly.
 ## Authors
 
 - Eric He
-- Ravi Ranasinghe
+- Ravindu Ranasinghe
