@@ -7,7 +7,7 @@ async function sendOtp(toEmail, code) {
   const response = await resend.emails.send({
     from: process.env.FROM_EMAIL,
     to: toEmail,
-    subject: 'UMN Discord Verification Code',
+    subject: 'Gopherfy verification code',
     text: `Your verification code is: ${code}\n\nExpires in 10 minutes. Do not share this code.`,
   });
   if (response.error) {
