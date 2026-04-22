@@ -28,15 +28,14 @@ const {
   OTP_SERVICE_KEY,
 } = process.env;
 
-if (!OTP_SERVICE_KEY) {
-  console.error('OTP_SERVICE_KEY missing — bot cannot authenticate to OTP service.');
-  process.exit(1);
-}
-
-const otpHeaders = {
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${OTP_SERVICE_KEY}`,
-};
+const otpHeaders = OTP_SERVICE_KEY
+  ? {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OTP_SERVICE_KEY}`,
+    }
+  : {
+      'Content-Type': 'application/json',
+    };
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
