@@ -41,6 +41,10 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'verify-panel',
+    description: 'Post the UMN verification panel (mods only)',
+  },
 ];
 
 const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
