@@ -21,6 +21,7 @@ const {
   getGuildConfig,
   setGuildConfig,
 } = require('./db');
+const log = require('../lib/logger').child({ module: 'bot' });
 
 const { DISCORD_TOKEN, OTP_SERVICE_URL = 'http://localhost:3001', OTP_SERVICE_KEY } = process.env;
 
@@ -41,7 +42,7 @@ async function applyGuildVerificationRoles(member, config) {
   try {
     await member.roles.add(config.verified_role_id);
   } catch (err) {
-    console.error('Role assignment failed:', err);
+    log.error({ err, guildId: member.guild.id }, 'role assignment failed');
     throw err;
   }
 }
@@ -60,7 +61,7 @@ function setVerificationPresence() {
 }
 
 client.once('clientReady', () => {
-  console.log(`Bot ready: ${client.user.tag}`);
+  log.info({ tag: client.user.tag }, 'bot ready');
   setVerificationPresence();
 });
 
@@ -556,7 +557,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
   } catch (err) {
-    console.error('interactionCreate failed:', err);
+    log.error({ err }, 'interactionCreate failed');
 
     try {
       if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
