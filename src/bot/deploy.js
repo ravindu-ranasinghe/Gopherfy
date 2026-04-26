@@ -32,7 +32,7 @@ const commands = [
   },
   {
     name: 'whois',
-    description: 'Look up what @umn.edu a user verified with (mods only)',
+    description: 'Check whether a user is verified through Gopherfy (mods only)',
     options: [
       {
         type: 6, // USER
@@ -41,6 +41,10 @@ const commands = [
         required: true,
       },
     ],
+  },
+  {
+    name: 'whois-audit',
+    description: 'Show recent /whois activity grouped by moderator (admins only)',
   },
   {
     name: 'verify-panel',

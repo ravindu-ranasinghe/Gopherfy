@@ -21,6 +21,10 @@ const {
   getGuildConfig,
   setGuildConfig,
   hashEmail,
+  whoisCanLookup,
+  whoisCommitLookup,
+  insertWhoisAudit,
+  getRecentWhoisByGuild,
 } = require('./db');
 const { sign: signRequest } = require('../lib/http-signing');
 const { validateUmnEmail, normalize: normalizeEmail } = require('../lib/email');
@@ -331,9 +335,23 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       if (commandName === 'whois') {
-        if (!interaction.memberPermissions.has('ManageGuild')) {
+        // Defense in depth beyond setDefaultMemberPermissions on the
+        // command itself: refuse unless the caller has either ManageGuild
+        // or ModerateMembers in this guild.
+        const perms = interaction.memberPermissions;
+        if (!perms || (!perms.has('ManageGuild') && !perms.has('ModerateMembers'))) {
           return interaction.reply({
             content: 'You do not have permission to use this command.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        // Per-mod 30/hour rate limit. Failed permission checks above do
+        // NOT debit the counter (no successful access occurred).
+        const gate = whoisCanLookup(userId);
+        if (!gate.allowed) {
+          return interaction.reply({
+            content: 'Lookup limit reached — try again later.',
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -341,9 +359,14 @@ client.on('interactionCreate', async (interaction) => {
         const target = interaction.options.getUser('user');
         const row = getByDiscordId(target.id);
 
+        // Audit and debit happen on every permitted invocation, regardless
+        // of whether the target was verified.
+        whoisCommitLookup(userId);
+        insertWhoisAudit(userId, target.id, interaction.guild.id);
+
         if (!row) {
           return interaction.reply({
-            content: `❌ <@${target.id}> is not verified.`,
+            content: `<@${target.id}> · ❌ Not verified through Gopherfy.`,
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -357,10 +380,43 @@ client.on('interactionCreate', async (interaction) => {
           timeZoneName: 'short',
         });
 
-        // Plaintext email is no longer at rest; the minimum-disclosure
-        // redesign in Prompt 12 will harden this further.
         return interaction.reply({
-          content: `🔍 **User:** <@${target.id}>\n✅ **Verified:** ${verifiedAt}`,
+          content:
+            `<@${target.id}> · ✅ Verified (UMN affiliation confirmed)\n` +
+            `Verified at: ${verifiedAt}\n` +
+            'Note: email addresses are not retrievable from this bot. ' +
+            "If you need the email for moderation, use Discord's ToS-aligned escalation process.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
+      if (commandName === 'whois-audit') {
+        if (!interaction.memberPermissions || !interaction.memberPermissions.has('ManageGuild')) {
+          return interaction.reply({
+            content: 'You do not have permission to use this command.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        const rows = getRecentWhoisByGuild(interaction.guild.id, 25);
+        if (rows.length === 0) {
+          return interaction.reply({
+            content: 'No /whois lookups recorded in this guild yet.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+
+        const lines = rows.map((r) => {
+          const when = new Date(r.most_recent).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          });
+          return `<@${r.actor_id}> — ${r.lookups} lookup${r.lookups === 1 ? '' : 's'} (last: ${when})`;
+        });
+        return interaction.reply({
+          content: `**Recent /whois activity (last 25 actors):**\n${lines.join('\n')}`,
           flags: MessageFlags.Ephemeral,
         });
       }
