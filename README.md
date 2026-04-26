@@ -1,5 +1,7 @@
 # Gopherfy
 
+[![CI](https://github.com/ravindu-ranasinghe/umn-discord-verification/actions/workflows/ci.yml/badge.svg)](https://github.com/ravindu-ranasinghe/umn-discord-verification/actions/workflows/ci.yml)
+
 A Discord verification bot that confirms a member owns a real `@umn.edu`
 email address, remembers them, and auto-assigns the "verified" role in
 any server running Gopherfy where that member shows up later.
