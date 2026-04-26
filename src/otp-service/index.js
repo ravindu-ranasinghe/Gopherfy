@@ -1,5 +1,6 @@
 require('dotenv').config();
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const Database = require('better-sqlite3');
 const { runMigrations } = require('../lib/migrations');
@@ -33,6 +34,27 @@ db.pragma('busy_timeout = 5000');
 runMigrations(db, path.join(__dirname, '..', '..', 'migrations'), log);
 
 const otpStore = createOtpStore({ db, hmacKey });
+
+function intFromEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0) {
+    log.warn({ name, raw }, 'invalid numeric env var, using fallback');
+    return fallback;
+  }
+  return n;
+}
+
+const RATE_LIMITS = {
+  user: intFromEnv('OTP_RATE_USER_PER_HOUR', 3),
+  email: intFromEnv('OTP_RATE_EMAIL_PER_HOUR', 3),
+  ip: intFromEnv('OTP_RATE_IP_PER_HOUR', 30),
+};
+
+function emailHmac(email) {
+  return crypto.createHmac('sha256', hmacKey).update(email).digest('hex');
+}
 
 const app = express();
 // Capture req.rawBody so the signature verifier sees the EXACT bytes the
@@ -84,9 +106,17 @@ app.post('/send', async (req, res) => {
     return res.status(400).json({ ok: false, reason: 'bad_request' });
   }
 
-  const userScope = `user:${discordId}`;
-  const gate = otpStore.canSend([userScope]);
+  // Three-axis rate limit: per-user, per-email-HMAC, per-IP. The
+  // per-email key prevents an attacker rotating Discord accounts to
+  // spam a single mailbox. The per-IP key catches a flood from one
+  // host across many emails. canSend([...]) returns the scope with
+  // the longest remaining window so Retry-After is correct.
+  const scopes = [`user:${discordId}`, `email:${emailHmac(email)}`, `ip:${req.ip}`];
+  const gate = otpStore.canSend(scopes, { limits: RATE_LIMITS });
   if (!gate.allowed) {
+    const retryAfterSec = Math.max(1, Math.ceil(gate.retryAfterMs / 1000));
+    res.set('Retry-After', String(retryAfterSec));
+    log.warn({ scope: gate.scope, retryAfterSec }, 'rate limited');
     return res.json({ ok: false, reason: 'rate_limited' });
   }
 
@@ -100,7 +130,7 @@ app.post('/send', async (req, res) => {
   }
 
   otpStore.storeOtp(discordId, email, code);
-  otpStore.commitSend([userScope]);
+  otpStore.commitSend(scopes);
   return res.json({ ok: true });
 });
 
