@@ -47,6 +47,11 @@ const commands = [
     description: 'Show recent /whois activity grouped by moderator (admins only)',
   },
   {
+    name: 'forget-me',
+    description:
+      'Delete your verification record from Gopherfy. Removes verified roles in all Gopherfy servers.',
+  },
+  {
     name: 'verify-panel',
     description: 'Post the Gopherfy verification panel (mods only)',
   },
