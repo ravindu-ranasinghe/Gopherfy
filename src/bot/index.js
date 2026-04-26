@@ -215,14 +215,19 @@ client.on('interactionCreate', async (interaction) => {
             flags: MessageFlags.Ephemeral,
           });
         }
-        if (getByEmail(email)) {
-          return interaction.reply({
-            content: 'That email is already linked to another account.',
-            flags: MessageFlags.Ephemeral,
-          });
-        }
-
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        // Email-collision is handled with a generic success message and
+        // no OTP service call. The attacker can't tell whether the
+        // address is "free", "already linked to a different Discord
+        // account", or "already linked to your own account" -- they all
+        // look identical from outside.
+        if (getByEmail(email)) {
+          log.info({ discordId: userId }, 'verify: email collision, generic response');
+          return interaction.editReply(
+            'If that email is eligible, a code has been sent. Run /code with the 6-digit code. Expires in 10 minutes.',
+          );
+        }
 
         try {
           const res = await postToOtpService('/send', { discordId: userId, email });
@@ -230,7 +235,7 @@ client.on('interactionCreate', async (interaction) => {
 
           if (data.ok) {
             await interaction.editReply(
-              `Code sent to **${email}**. Run /code with the 6-digit code. Expires in 10 minutes.`,
+              'If that email is eligible, a code has been sent. Run /code with the 6-digit code. Expires in 10 minutes.',
             );
           } else if (data.reason === 'rate_limited') {
             await interaction.editReply('Too many attempts. Try again in an hour.');
@@ -445,14 +450,15 @@ client.on('interactionCreate', async (interaction) => {
           });
         }
 
-        if (getByEmail(email)) {
-          return interaction.reply({
-            content: 'That email is already linked to another account.',
-            flags: MessageFlags.Ephemeral,
-          });
-        }
-
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        // Same enumeration-protection contract as in /verify above.
+        if (getByEmail(email)) {
+          log.info({ discordId: userId }, 'modal verify: email collision, generic response');
+          return interaction.editReply(
+            'If that email is eligible, a code has been sent. Run /code with the 6-digit code. Expires in 10 minutes.',
+          );
+        }
 
         try {
           const res = await postToOtpService('/send', { discordId: userId, email });
