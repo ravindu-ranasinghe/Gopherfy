@@ -1,11 +1,11 @@
 require('dotenv').config();
 const path = require('path');
-const crypto = require('crypto');
 const express = require('express');
 const Database = require('better-sqlite3');
 const { runMigrations } = require('../lib/migrations');
 const { createOtpStore } = require('./otp');
 const { sendOtp } = require('./email');
+const { verify: verifySignature } = require('../lib/http-signing');
 const log = require('../lib/logger').child({ module: 'otp-service' });
 
 const port = process.env.OTP_SERVICE_PORT || 3001;
@@ -35,7 +35,16 @@ runMigrations(db, path.join(__dirname, '..', '..', 'migrations'), log);
 const otpStore = createOtpStore({ db, hmacKey });
 
 const app = express();
-app.use(express.json({ limit: '1kb' }));
+// Capture req.rawBody so the signature verifier sees the EXACT bytes the
+// client signed. A re-stringified req.body could differ in whitespace.
+app.use(
+  express.json({
+    limit: '1kb',
+    verify: (req, _res, buf) => {
+      req.rawBody = buf.length ? buf.toString('utf8') : '';
+    },
+  }),
+);
 
 app.use((req, res, next) => {
   res.on('finish', () => {
@@ -44,21 +53,25 @@ app.use((req, res, next) => {
   next();
 });
 
-const expectedAuthHash = crypto.createHash('sha256').update(`Bearer ${serviceKey}`).digest();
-
-function isAuthed(req) {
-  const header = req.get('authorization');
-  if (!header) return false;
-  const providedHash = crypto.createHash('sha256').update(header).digest();
-  return crypto.timingSafeEqual(providedHash, expectedAuthHash);
-}
-
 function isNonEmptyString(v, maxLen) {
   return typeof v === 'string' && v.length > 0 && v.length <= maxLen;
 }
 
 app.use((req, res, next) => {
-  if (!isAuthed(req)) {
+  const timestamp = req.get('x-timestamp');
+  const signature = req.get('x-signature');
+  if (!timestamp || !signature) {
+    log.warn({ reason: 'missing_headers', path: req.path }, 'request rejected');
+    return res.status(401).json({ ok: false, reason: 'unauthorized' });
+  }
+  const ok = verifySignature({
+    secret: serviceKey,
+    timestamp,
+    body: req.rawBody ?? '',
+    signature,
+  });
+  if (!ok) {
+    log.warn({ reason: 'bad_signature_or_stale', path: req.path }, 'request rejected');
     return res.status(401).json({ ok: false, reason: 'unauthorized' });
   }
   next();

@@ -21,18 +21,41 @@ const {
   getGuildConfig,
   setGuildConfig,
 } = require('./db');
+const { sign: signRequest } = require('../lib/http-signing');
 const log = require('../lib/logger').child({ module: 'bot' });
 
 const { DISCORD_TOKEN, OTP_SERVICE_URL = 'http://localhost:3001', OTP_SERVICE_KEY } = process.env;
 
-const otpHeaders = OTP_SERVICE_KEY
-  ? {
+if (!OTP_SERVICE_KEY || OTP_SERVICE_KEY.length < 32) {
+  log.error('OTP_SERVICE_KEY missing or too short (need >=32 chars). Refusing to start.');
+  process.exit(1);
+}
+
+/**
+ * POST a JSON body to the OTP service with HMAC-SHA256 request signing.
+ *
+ * Headers sent:
+ *   X-Timestamp: <Date.now()>
+ *   X-Signature: <hex of HMAC-SHA256(OTP_SERVICE_KEY, ts + '.' + body)>
+ *
+ * The exact serialized body bytes are signed and re-used as the request
+ * body so the receiver sees the same payload it verified.
+ */
+async function postToOtpService(routePath, payload) {
+  const body = JSON.stringify(payload);
+  const timestamp = Date.now();
+  const signature = signRequest({ secret: OTP_SERVICE_KEY, timestamp, body });
+  const res = await fetch(`${OTP_SERVICE_URL}${routePath}`, {
+    method: 'POST',
+    headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${OTP_SERVICE_KEY}`,
-    }
-  : {
-      'Content-Type': 'application/json',
-    };
+      'X-Timestamp': String(timestamp),
+      'X-Signature': signature,
+    },
+    body,
+  });
+  return res;
+}
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
@@ -201,11 +224,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         try {
-          const res = await fetch(`${OTP_SERVICE_URL}/send`, {
-            method: 'POST',
-            headers: otpHeaders,
-            body: JSON.stringify({ discordId: userId, email }),
-          });
+          const res = await postToOtpService('/send', { discordId: userId, email });
           const data = await res.json();
 
           if (data.ok) {
@@ -252,11 +271,7 @@ client.on('interactionCreate', async (interaction) => {
 
         let data;
         try {
-          const res = await fetch(`${OTP_SERVICE_URL}/verify`, {
-            method: 'POST',
-            headers: otpHeaders,
-            body: JSON.stringify({ discordId: userId, code: input }),
-          });
+          const res = await postToOtpService('/verify', { discordId: userId, code: input });
           data = await res.json();
         } catch {
           return interaction.reply({
@@ -439,11 +454,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         try {
-          const res = await fetch(`${OTP_SERVICE_URL}/send`, {
-            method: 'POST',
-            headers: otpHeaders,
-            body: JSON.stringify({ discordId: userId, email }),
-          });
+          const res = await postToOtpService('/send', { discordId: userId, email });
           const data = await res.json();
 
           if (!data.ok) {
@@ -502,11 +513,7 @@ client.on('interactionCreate', async (interaction) => {
 
         let data;
         try {
-          const res = await fetch(`${OTP_SERVICE_URL}/verify`, {
-            method: 'POST',
-            headers: otpHeaders,
-            body: JSON.stringify({ discordId: userId, code: input }),
-          });
+          const res = await postToOtpService('/verify', { discordId: userId, code: input });
           data = await res.json();
         } catch {
           return interaction.reply({
