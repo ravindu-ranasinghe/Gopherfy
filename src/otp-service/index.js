@@ -3,15 +3,23 @@ const crypto = require('crypto');
 const express = require('express');
 const { generateCode, canSend, commitSend, storeOtp, validateOtp } = require('./otp');
 const { sendOtp } = require('./email');
+const log = require('../lib/logger').child({ module: 'otp-service' });
 
 const app = express();
 app.use(express.json({ limit: '1kb' }));
+
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    log.info({ method: req.method, path: req.path, status: res.statusCode }, 'request');
+  });
+  next();
+});
 
 const port = process.env.OTP_SERVICE_PORT || 3001;
 const serviceKey = process.env.OTP_SERVICE_KEY;
 
 if (!serviceKey || serviceKey.length < 32) {
-  console.error('OTP_SERVICE_KEY missing or too short (need >=32 chars). Refusing to start.');
+  log.error('OTP_SERVICE_KEY missing or too short (need >=32 chars). Refusing to start.');
   process.exit(1);
 }
 
@@ -51,7 +59,7 @@ app.post('/send', async (req, res) => {
   try {
     await sendOtp(email, code);
   } catch (err) {
-    console.error('sendOtp failed:', err.message);
+    log.error({ err }, 'sendOtp failed');
     return res.json({ ok: false, reason: 'send_failed' });
   }
 
@@ -71,4 +79,4 @@ app.post('/verify', (req, res) => {
   return res.json(result);
 });
 
-app.listen(port, () => console.log(`OTP service running on port ${port}`));
+app.listen(port, () => log.info({ port }, 'OTP service listening'));

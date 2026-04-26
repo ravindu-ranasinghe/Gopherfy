@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
+const log = require('../lib/logger').child({ module: 'deploy' });
 
 const { DISCORD_TOKEN, CLIENT_ID } = process.env;
 
@@ -63,5 +64,5 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
 
 rest
   .put(Routes.applicationCommands(CLIENT_ID), { body: commands })
-  .then(() => console.log('Commands registered'))
-  .catch(console.error);
+  .then(() => log.info('Commands registered'))
+  .catch((err) => log.error({ err }, 'Command registration failed'));
