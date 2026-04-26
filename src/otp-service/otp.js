@@ -64,9 +64,7 @@ function validateOtp(userId, inputCode) {
 
   const stored = Buffer.from(entry.code, 'utf8');
   const provided = Buffer.from(inputCode, 'utf8');
-  const matches =
-    stored.length === provided.length &&
-    crypto.timingSafeEqual(stored, provided);
+  const matches = stored.length === provided.length && crypto.timingSafeEqual(stored, provided);
 
   if (!matches) {
     if (entry.attempts >= MAX_VERIFY_ATTEMPTS) {
