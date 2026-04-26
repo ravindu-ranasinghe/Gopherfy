@@ -156,4 +156,7 @@ const pruneTimer = setInterval(() => {
 }, 60 * 1000);
 pruneTimer.unref();
 
-app.listen(port, () => log.info({ port }, 'OTP service listening'));
+// Bind explicitly to loopback. The OTP service is reached only by the
+// bot, on the same VM. Not binding 0.0.0.0 keeps the SMTP-key-holding
+// process off the public internet even before any firewall rules.
+app.listen(port, '127.0.0.1', () => log.info({ port }, 'OTP service listening'));
