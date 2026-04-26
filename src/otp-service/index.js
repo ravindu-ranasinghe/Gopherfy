@@ -1,13 +1,7 @@
 require('dotenv').config();
 const crypto = require('crypto');
 const express = require('express');
-const {
-  generateCode,
-  canSend,
-  commitSend,
-  storeOtp,
-  validateOtp,
-} = require('./otp');
+const { generateCode, canSend, commitSend, storeOtp, validateOtp } = require('./otp');
 const { sendOtp } = require('./email');
 
 const app = express();
@@ -21,10 +15,7 @@ if (!serviceKey || serviceKey.length < 32) {
   process.exit(1);
 }
 
-const expectedAuthHash = crypto
-  .createHash('sha256')
-  .update(`Bearer ${serviceKey}`)
-  .digest();
+const expectedAuthHash = crypto.createHash('sha256').update(`Bearer ${serviceKey}`).digest();
 
 function isAuthed(req) {
   const header = req.get('authorization');
