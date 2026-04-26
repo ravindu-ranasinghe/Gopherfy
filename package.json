@@ -33,6 +33,7 @@
   "homepage": "https://github.com/ravindu-ranasinghe/umn-discord-verification#readme",
   "dependencies": {
     "@discordjs/rest": "^2.6.1",
+    "@google-cloud/secret-manager": "^6.1.1",
     "better-sqlite3": "^12.9.0",
     "discord-api-types": "^0.38.47",
     "discord.js": "^14.26.3",

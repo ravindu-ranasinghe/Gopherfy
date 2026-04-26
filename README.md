@@ -112,16 +112,58 @@ Splitting email out of the bot means:
   role changes) without losing in-flight verification attempts — or,
   the reverse, the OTP service can be restarted without dropping the
   bot's connection to Discord.
-- The Resend API key only ever lives in the OTP service's environment.
+- The Resend API key is only used by the OTP service (from `.env` in
+  development, or Secret Manager in production — never by the Discord bot).
 - If Gopherfy ever needs to swap email providers, only one small
   service changes.
 
-The two services authenticate to each other with a shared secret
-(`OTP_SERVICE_KEY`) sent as an `Authorization: Bearer` header and
-compared in constant time. Without the secret, the OTP service refuses
+The two services authenticate to each other with **HMAC-SHA256**
+request signing over the raw JSON body plus a timestamp
+(`OTP_SERVICE_KEY`). Without a valid signature, the OTP service refuses
 every request — so even if the service port is reachable on the host
 network, nobody can request codes to arbitrary addresses or brute-force
 someone else's pending code.
+
+## Production deployment (Google Cloud)
+
+In production (`NODE_ENV=production`), the four sensitive values
+(`DISCORD_TOKEN`, `OTP_SERVICE_KEY`, `OTP_HMAC_KEY`, `RESEND_API_KEY`)
+are read from **Google Cloud Secret Manager** instead of `process.env`.
+
+1. Enable the Secret Manager API on your GCP project.
+2. Create secrets whose **names** match those env keys exactly. Store
+   one value per secret; runtime reads `…/versions/latest` (see
+   **Secret rotation** below).
+3. Create a **service account** for the workload (for example the GCE
+   VM). Grant it `roles/secretmanager.secretAccessor` on each secret
+   (or on the project if you accept broader scope).
+4. **Attach** that service account to the GCE instance. Do **not** pass
+   the four secrets as VM environment variables or in cloud-init. Use
+   env only for non-secret config (`LOG_LEVEL`, `FROM_EMAIL`,
+   `OTP_SERVICE_URL`, rate-limit tuning, `GCP_PROJECT_ID`, etc.).
+5. Set `GCP_PROJECT_ID` on the VM. The Node client uses [Application
+   Default
+   Credentials](https://cloud.google.com/docs/authentication/application-default-credentials);
+   on GCE this is the attached service account. **Do not** deploy a
+   downloaded JSON key file for production.
+
+**Local development:** use `NODE_ENV=development` (or leave unset) and
+keep the four values in `.env` as today; Secret Manager is not used.
+
+`npm run deploy:commands` uses `loadSecrets()` for `DISCORD_TOKEN`; you
+still need `CLIENT_ID` in the environment.
+
+## Secret rotation
+
+Add a **new version** of a secret in the GCP console and retire the old
+version when ready. Gopherfy always reads `versions/latest`, so **restart
+the bot and OTP processes** after rotation to pick up new material.
+
+For some workloads Google recommends **pinning** a specific version
+(e.g. `versions/5`) instead of `latest`, so an accidentally re-enabled
+old version cannot change behavior silently. Gopherfy defaults to
+`latest` for simplicity; if you need pins, adjust the resource path in
+[src/lib/secrets.js](src/lib/secrets.js) and redeploy.
 
 ## Commands
 

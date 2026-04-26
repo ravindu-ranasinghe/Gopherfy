@@ -8,16 +8,17 @@ let originalEnv;
 
 beforeEach(() => {
   originalEnv = { ...process.env };
-  process.env.DISCORD_TOKEN = 'x'.repeat(40);
-  process.env.OTP_SERVICE_KEY = 'y'.repeat(40);
-  process.env.OTP_HMAC_KEY = 'z'.repeat(40);
+  process.env['DISCORD_TOKEN'] = 'x'.repeat(40);
+  process.env['OTP_SERVICE_KEY'] = 'y'.repeat(40);
+  process.env['OTP_HMAC_KEY'] = 'z'.repeat(40);
+  process.env['RESEND_API_KEY'] = 'r'.repeat(40);
   jest.resetModules();
 });
 afterEach(() => {
   process.env = originalEnv;
 });
 
-function loadBotWithMocks(dbMock) {
+async function loadBotWithMocks(dbMock) {
   const handlers = {};
   jest.doMock('discord.js', () => ({
     ActivityType: { Watching: 3 },
@@ -30,14 +31,17 @@ function loadBotWithMocks(dbMock) {
       on(event, h) {
         handlers[event] = h;
       }
-      login() {}
+      login() {
+        return Promise.resolve();
+      }
     },
     GatewayIntentBits: { Guilds: 1, GuildMembers: 2 },
   }));
   jest.doMock('dotenv', () => ({ config: () => {} }));
-  jest.doMock('../db', () => dbMock);
+  jest.doMock('../db', () => jest.fn(() => dbMock));
   jest.doMock('../handlers', () => ({ dispatch: jest.fn() }));
   require('../index');
+  await Promise.resolve();
   return handlers;
 }
 
@@ -59,7 +63,7 @@ function makeDbMock() {
 describe('guildDelete listener', () => {
   test('deletes guild_config and never touches verified_users', async () => {
     const dbMock = makeDbMock();
-    const handlers = loadBotWithMocks(dbMock);
+    const handlers = await loadBotWithMocks(dbMock);
     expect(typeof handlers.guildDelete).toBe('function');
     await handlers.guildDelete({ id: 'gZ' });
     expect(dbMock.deleteGuildConfig).toHaveBeenCalledWith('gZ');
@@ -71,7 +75,7 @@ describe('guildDelete listener', () => {
 describe('guildMemberRemove listener', () => {
   test('does NOT delete the verified record (info-only)', async () => {
     const dbMock = makeDbMock();
-    const handlers = loadBotWithMocks(dbMock);
+    const handlers = await loadBotWithMocks(dbMock);
     expect(typeof handlers.guildMemberRemove).toBe('function');
     await handlers.guildMemberRemove({ id: 'user1', guild: { id: 'g1' } });
     expect(dbMock.deleteVerified).not.toHaveBeenCalled();
