@@ -18,13 +18,16 @@ const {
   getByEmailHmac,
   getByDiscordId,
   addVerifiedHmac,
+  deleteVerified,
   getGuildConfig,
   setGuildConfig,
+  deleteGuildConfig,
   hashEmail,
   whoisCanLookup,
   whoisCommitLookup,
   insertWhoisAudit,
   getRecentWhoisByGuild,
+  insertDeletionAudit,
 } = require('./db');
 const { sign: signRequest } = require('../lib/http-signing');
 const { validateUmnEmail, normalize: normalizeEmail } = require('../lib/email');
@@ -106,6 +109,24 @@ client.on('guildMemberAdd', async (member) => {
   }
 });
 
+// guildMemberRemove is intentionally info-only: a user leaving guild A
+// does not mean they want to be forgotten from guild B's role grants.
+// The verified_users row is the user's identity, not a per-guild
+// artifact, so we never delete it here. (A future "user is in 0
+// Gopherfy guilds → schedule deletion" pass is documented as a TODO in
+// the runbook.)
+client.on('guildMemberRemove', (member) => {
+  log.info({ event: 'member_left_guild', guildId: member.guild.id, userId: member.id });
+});
+
+// guildDelete fires when the bot is kicked or the guild is deleted.
+// Only the per-guild config is meaningless without the bot — verified
+// records are user-scoped, never touched here.
+client.on('guildDelete', (guild) => {
+  deleteGuildConfig(guild.id);
+  log.info({ event: 'guild_removed', guildId: guild.id });
+});
+
 client.on('interactionCreate', async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
@@ -113,7 +134,10 @@ client.on('interactionCreate', async (interaction) => {
       const userId = user.id;
       const config = interaction.guild ? getGuildConfig(interaction.guild.id) : null;
 
-      if (commandName !== 'setup' && !config) {
+      // /setup configures a guild for the first time, /forget-me is a
+      // user-data action that must work regardless of guild config (and
+      // in DMs), so neither requires guild_config to exist.
+      if (commandName !== 'setup' && commandName !== 'forget-me' && !config) {
         return interaction.reply({
           content: "⚠️ This server hasn't been configured yet. Ask an admin to run `/setup` first.",
           flags: MessageFlags.Ephemeral,
@@ -421,6 +445,25 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
+      if (commandName === 'forget-me') {
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('forget_me_confirm')
+            .setLabel('Confirm Delete')
+            .setStyle(ButtonStyle.Danger),
+          new ButtonBuilder()
+            .setCustomId('forget_me_cancel')
+            .setLabel('Cancel')
+            .setStyle(ButtonStyle.Secondary),
+        );
+        return interaction.reply({
+          content:
+            'Are you sure? This deletes your verification record and removes verified roles from all Gopherfy-managed servers.',
+          components: [row],
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
       return;
     }
 
@@ -457,6 +500,38 @@ client.on('interactionCreate', async (interaction) => {
 
         modal.addComponents(new ActionRowBuilder().addComponents(codeInput));
         return interaction.showModal(modal);
+      }
+
+      if (interaction.customId === 'forget_me_cancel') {
+        return interaction.update({ content: 'Cancelled.', components: [] });
+      }
+
+      if (interaction.customId === 'forget_me_confirm') {
+        const userId = interaction.user.id;
+        deleteVerified(userId);
+        insertDeletionAudit(userId, 'user_request');
+
+        // Remove the verified role per guild. One guild's failure must
+        // not stop the others — log + continue.
+        for (const [, guild] of client.guilds.cache) {
+          const cfg = getGuildConfig(guild.id);
+          if (!cfg) continue;
+          try {
+            const member = await guild.members.fetch(userId).catch(() => null);
+            if (member) {
+              await member.roles.remove(cfg.verified_role_id).catch((err) => {
+                log.warn({ err, guildId: guild.id, userId }, 'forget-me: role remove failed');
+              });
+            }
+          } catch (err) {
+            log.warn({ err, guildId: guild.id, userId }, 'forget-me: per-guild cleanup failed');
+          }
+        }
+
+        return interaction.update({
+          content: 'Your verification record has been deleted. You may re-verify any time.',
+          components: [],
+        });
       }
 
       return;

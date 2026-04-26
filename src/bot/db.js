@@ -69,6 +69,10 @@ const stmtIncrementWhoisCounter = db.prepare(
    ON CONFLICT(scope_key) DO UPDATE SET count = count + 1`,
 );
 
+const stmtInsertDeletionAudit = db.prepare(
+  'INSERT INTO deletion_audit (subject_id, reason, deleted_at) VALUES (?, ?, ?)',
+);
+
 function isVerified(discordId) {
   return !!stmtIsVerified.get(discordId);
 }
@@ -144,6 +148,10 @@ function getRecentWhoisByGuild(guildId, limit = 25) {
   return stmtRecentWhoisByGuild.all(guildId, limit);
 }
 
+function insertDeletionAudit(subjectId, reason, deletedAt = Date.now()) {
+  return stmtInsertDeletionAudit.run(subjectId, reason, deletedAt);
+}
+
 module.exports = {
   db,
   isVerified,
@@ -159,4 +167,5 @@ module.exports = {
   whoisCommitLookup,
   insertWhoisAudit,
   getRecentWhoisByGuild,
+  insertDeletionAudit,
 };
