@@ -6,6 +6,22 @@ const log = require('../lib/logger').child({ module: 'db' });
 const dbPath = path.join(process.cwd(), 'verified.db');
 const db = new Database(dbPath);
 
+// Pragmas must run before migrations so the schema is created against the
+// final journal mode and constraint behavior.
+// - WAL increases write throughput and read concurrency.
+// - synchronous=NORMAL is the safe-and-fast pairing for WAL mode.
+// - foreign_keys=ON is required for FK constraints to actually fire
+//   (SQLite default is off).
+// - busy_timeout makes contended writes wait briefly instead of failing
+//   immediately with SQLITE_BUSY.
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 5000');
+
+const journalMode = db.pragma('journal_mode', { simple: true });
+log.info({ journalMode, dbPath }, 'database opened');
+
 const migrationsDir = path.join(__dirname, '..', '..', 'migrations');
 runMigrations(db, migrationsDir, log);
 
