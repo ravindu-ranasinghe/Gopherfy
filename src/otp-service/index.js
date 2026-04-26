@@ -191,7 +191,8 @@ if (require.main === module) {
     const hmacKey = secrets.OTP_HMAC_KEY;
     const serviceKey = secrets.OTP_SERVICE_KEY;
 
-    const dbPath = path.join(process.cwd(), 'verified.db');
+    const dataDir = process.env.GOPHERFY_DATA_DIR || process.cwd();
+    const dbPath = path.join(dataDir, 'verified.db');
     const db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
     db.pragma('synchronous = NORMAL');

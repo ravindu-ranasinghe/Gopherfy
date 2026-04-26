@@ -1,0 +1,41 @@
+[Unit]
+Description=Gopherfy SQLite backup to GCS (encrypted)
+After=network.target
+
+[Service]
+Type=oneshot
+User=gopherfy
+Group=gopherfy
+WorkingDirectory=/opt/gopherfy
+ExecStart=/usr/bin/node /opt/gopherfy/scripts/backup.js
+Environment=NODE_ENV=production
+Environment=GCP_PROJECT_ID=your-gcp-project-id
+Environment=GOPHERFY_DATA_DIR=/opt/gopherfy/data
+Environment=BACKUP_GCS_BUCKET=
+Environment=BACKUP_GPG_RECIPIENT=
+Environment=LOG_LEVEL=info
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RemoveIPC=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+ReadWritePaths=/opt/gopherfy/data
+UMask=0077

@@ -17,7 +17,8 @@ function createBotDb(hmacKey) {
     process.exit(1);
   }
 
-  const dbPath = path.join(process.cwd(), 'verified.db');
+  const dataDir = process.env.GOPHERFY_DATA_DIR || process.cwd();
+  const dbPath = path.join(dataDir, 'verified.db');
   const db = new Database(dbPath);
 
   db.pragma('journal_mode = WAL');

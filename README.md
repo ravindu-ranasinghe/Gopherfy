@@ -8,6 +8,13 @@ any server running Gopherfy where that member shows up later.
 
 Built by **Eric He** and **Ravindu Ranasinghe**.
 
+## Secret scanning (GitHub)
+
+Enable **Secret scanning** (and push protection if available) for this
+repository: **Settings → Code security and analysis**. See
+[About secret scanning](https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning).
+CI also runs **gitleaks** on every workflow.
+
 ## What it does
 
 When someone joins a Discord server running Gopherfy, they start with no
@@ -17,7 +24,7 @@ verification** on the panel, enter their `@umn.edu` email, receive a
 matches, the bot stores the link between their Discord account and their
 UMN email and grants the verified role.
 
-The next time that same Discord user joins a *different* server running
+The next time that same Discord user joins a _different_ server running
 Gopherfy, the bot recognizes them from the shared database and assigns
 the verified role automatically — no second email round-trip.
 
@@ -83,7 +90,7 @@ the email on success — the bot never sees the code itself.
 3. OTP service checks the per-user send rate limit (3 per hour).
 4. It generates a 6-digit code with `crypto.randomInt`.
 5. It hands the code to Resend, which delivers the email.
-6. *Only if* Resend accepts the send does the service store the code
+6. _Only if_ Resend accepts the send does the service store the code
    in memory and consume a rate-limit slot. Failed sends leave no
    trace — a legitimate user is never locked out because of an
    upstream email outage.
@@ -167,13 +174,13 @@ old version cannot change behavior silently. Gopherfy defaults to
 
 ## Commands
 
-| Command | Who | What |
-|---|---|---|
-| `/setup verified-role:<role>` | Server admins | One-time per-server config |
-| `/verify-panel` | Mods | Post the button-driven verification panel |
-| `/verify [email]` | Everyone | Start verification (slash-command flow) |
-| `/code <digits>` | Everyone | Submit the 6-digit code |
-| `/whois <user>` | Mods | Look up which UMN email a member verified with |
+| Command                       | Who           | What                                           |
+| ----------------------------- | ------------- | ---------------------------------------------- |
+| `/setup verified-role:<role>` | Server admins | One-time per-server config                     |
+| `/verify-panel`               | Mods          | Post the button-driven verification panel      |
+| `/verify [email]`             | Everyone      | Start verification (slash-command flow)        |
+| `/code <digits>`              | Everyone      | Submit the 6-digit code                        |
+| `/whois <user>`               | Mods          | Look up which UMN email a member verified with |
 
 Most users go through the panel's **Start verification** / **Submit
 code** buttons rather than the slash commands directly.
