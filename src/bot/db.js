@@ -43,6 +43,32 @@ const stmtSetGuildConfig = db.prepare(
 );
 const stmtDeleteGuildConfig = db.prepare('DELETE FROM guild_config WHERE guild_id = ?');
 
+// /whois audit + per-mod rate limit reuse otp_send_counter (the schema is a
+// generic scope_key/count/reset_at counter; the OTP service prefixes its
+// scopes with user:/email:/ip:, the bot uses whois:<actorId>).
+const stmtInsertWhoisAudit = db.prepare(
+  'INSERT INTO whois_audit (actor_id, target_id, guild_id, looked_up_at) VALUES (?, ?, ?, ?)',
+);
+const stmtRecentWhoisByGuild = db.prepare(
+  `SELECT actor_id, COUNT(*) AS lookups, MAX(looked_up_at) AS most_recent
+     FROM whois_audit
+    WHERE guild_id = ?
+    GROUP BY actor_id
+    ORDER BY most_recent DESC
+    LIMIT ?`,
+);
+const stmtGetWhoisCounter = db.prepare('SELECT * FROM otp_send_counter WHERE scope_key = ?');
+const stmtResetWhoisCounter = db.prepare(
+  `INSERT INTO otp_send_counter (scope_key, count, reset_at)
+     VALUES (@scopeKey, 1, @resetAt)
+   ON CONFLICT(scope_key) DO UPDATE SET count = 1, reset_at = excluded.reset_at`,
+);
+const stmtIncrementWhoisCounter = db.prepare(
+  `INSERT INTO otp_send_counter (scope_key, count, reset_at)
+     VALUES (@scopeKey, 1, @resetAt)
+   ON CONFLICT(scope_key) DO UPDATE SET count = count + 1`,
+);
+
 function isVerified(discordId) {
   return !!stmtIsVerified.get(discordId);
 }
@@ -79,6 +105,45 @@ function hashEmail(email) {
   return emailHmac(HMAC_KEY, email);
 }
 
+const WHOIS_WINDOW_MS = 60 * 60 * 1000;
+const WHOIS_LIMIT = 30;
+
+/**
+ * Check whether `actorId` is under the per-hour /whois lookup limit.
+ * Returns { allowed: true } or { allowed: false, retryAfterMs }.
+ */
+function whoisCanLookup(actorId, { now = Date.now(), limit = WHOIS_LIMIT } = {}) {
+  const scopeKey = `whois:${actorId}`;
+  const row = stmtGetWhoisCounter.get(scopeKey);
+  if (!row || row.reset_at <= now) return { allowed: true };
+  if (row.count >= limit) {
+    return { allowed: false, retryAfterMs: row.reset_at - now };
+  }
+  return { allowed: true };
+}
+
+/**
+ * Debit one /whois lookup against `actorId`'s hourly window. The window
+ * begins on the first lookup and resets only when reset_at is in the past.
+ */
+function whoisCommitLookup(actorId, { now = Date.now(), windowMs = WHOIS_WINDOW_MS } = {}) {
+  const scopeKey = `whois:${actorId}`;
+  const existing = stmtGetWhoisCounter.get(scopeKey);
+  if (!existing || existing.reset_at <= now) {
+    stmtResetWhoisCounter.run({ scopeKey, resetAt: now + windowMs });
+  } else {
+    stmtIncrementWhoisCounter.run({ scopeKey, resetAt: existing.reset_at });
+  }
+}
+
+function insertWhoisAudit(actorId, targetId, guildId, lookedUpAt = Date.now()) {
+  return stmtInsertWhoisAudit.run(actorId, targetId, guildId, lookedUpAt);
+}
+
+function getRecentWhoisByGuild(guildId, limit = 25) {
+  return stmtRecentWhoisByGuild.all(guildId, limit);
+}
+
 module.exports = {
   db,
   isVerified,
@@ -90,4 +155,8 @@ module.exports = {
   setGuildConfig,
   deleteGuildConfig,
   hashEmail,
+  whoisCanLookup,
+  whoisCommitLookup,
+  insertWhoisAudit,
+  getRecentWhoisByGuild,
 };
