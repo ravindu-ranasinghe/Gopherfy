@@ -17,7 +17,8 @@
     "format:check": "prettier --check 'src/**/*.js' 'scripts/**/*.js' '*.{md,json}' '.github/**/*.{yml,yaml}' 'deploy/**/*.md'",
     "backup": "node scripts/backup.js",
     "restore": "node scripts/restore.js",
-    "prepare": "node -e \"if (process.env.CI === 'true' || process.env.CI === '1') process.exit(0)\" && husky"
+    "prepare": "node -e \"if (process.env.CI === 'true' || process.env.CI === '1') process.exit(0)\" && husky",
+    "verify": "npm ci && npm run lint && npm run format:check && npm test -- --ci && npm audit --audit-level=high"
   },
   "repository": {
     "type": "git",
