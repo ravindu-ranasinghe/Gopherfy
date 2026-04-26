@@ -1,22 +1,13 @@
-const Database = require('better-sqlite3');
 const path = require('path');
+const Database = require('better-sqlite3');
+const { runMigrations } = require('../lib/migrations');
+const log = require('../lib/logger').child({ module: 'db' });
 
-const db = new Database(path.join(process.cwd(), 'verified.db'));
+const dbPath = path.join(process.cwd(), 'verified.db');
+const db = new Database(dbPath);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS verified_users (
-    discord_id TEXT PRIMARY KEY,
-    email TEXT UNIQUE,
-    verified_at INTEGER
-  );
-
-  CREATE TABLE IF NOT EXISTS guild_config (
-    guild_id TEXT PRIMARY KEY,
-    verified_role_id TEXT NOT NULL,
-    unverified_role_id TEXT NOT NULL,
-    configured_at INTEGER
-  );
-`);
+const migrationsDir = path.join(__dirname, '..', '..', 'migrations');
+runMigrations(db, migrationsDir, log);
 
 const stmtIsVerified = db.prepare('SELECT 1 FROM verified_users WHERE discord_id = ?');
 const stmtGetByEmail = db.prepare('SELECT * FROM verified_users WHERE email = ?');
@@ -54,6 +45,7 @@ function setGuildConfig(guildId, verifiedRoleId, unverifiedRoleId) {
 }
 
 module.exports = {
+  db,
   isVerified,
   getByEmail,
   getByDiscordId,
