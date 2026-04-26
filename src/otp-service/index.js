@@ -162,63 +162,78 @@ module.exports = { createApp };
 if (require.main === module) {
   require('dotenv').config();
   const Database = require('better-sqlite3');
-  const { sendOtp } = require('./email');
+  const { loadSecrets } = require('../lib/secrets');
+  const { createSendOtp } = require('./email');
 
-  const port = process.env.OTP_SERVICE_PORT || 3001;
-  const serviceKey = process.env.OTP_SERVICE_KEY;
-  const hmacKey = process.env.OTP_HMAC_KEY;
+  (async () => {
+    const secrets = await loadSecrets();
 
-  if (!serviceKey || serviceKey.length < 32) {
-    log.error('OTP_SERVICE_KEY missing or too short (need >=32 chars). Refusing to start.');
-    process.exit(1);
-  }
-  if (!hmacKey || hmacKey.length < 32) {
-    log.error('OTP_HMAC_KEY missing or too short (need >=32 chars). Refusing to start.');
-    process.exit(1);
-  }
-
-  // The OTP service shares the bot's verified.db file but opens its own
-  // connection. SQLite WAL mode supports concurrent readers + a single
-  // writer across processes; busy_timeout absorbs short contention.
-  const dbPath = path.join(process.cwd(), 'verified.db');
-  const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
-  db.pragma('foreign_keys = ON');
-  db.pragma('busy_timeout = 5000');
-  runMigrations(db, path.join(__dirname, '..', '..', 'migrations'), log);
-
-  const otpStore = createOtpStore({ db, hmacKey });
-
-  const rateLimits = {
-    user: intFromEnv('OTP_RATE_USER_PER_HOUR', DEFAULT_RATE_LIMITS.user),
-    email: intFromEnv('OTP_RATE_EMAIL_PER_HOUR', DEFAULT_RATE_LIMITS.email),
-    ip: intFromEnv('OTP_RATE_IP_PER_HOUR', DEFAULT_RATE_LIMITS.ip),
-  };
-
-  const app = createApp({
-    db,
-    otpStore,
-    sendEmail: sendOtp,
-    hmacKey,
-    serviceKey,
-    rateLimits,
-    log,
-  });
-
-  // Periodically clear stale rows so the tables don't grow unboundedly.
-  // .unref() so the timer doesn't keep the process alive on shutdown.
-  const pruneTimer = setInterval(() => {
-    try {
-      otpStore.pruneExpired();
-    } catch (err) {
-      log.warn({ err }, 'pruneExpired failed');
+    if (!secrets.OTP_SERVICE_KEY || secrets.OTP_SERVICE_KEY.length < 32) {
+      log.error('OTP_SERVICE_KEY missing or too short (need >=32 chars). Refusing to start.');
+      process.exit(1);
     }
-  }, 60 * 1000);
-  pruneTimer.unref();
+    if (!secrets.OTP_HMAC_KEY || secrets.OTP_HMAC_KEY.length < 32) {
+      log.error('OTP_HMAC_KEY missing or too short (need >=32 chars). Refusing to start.');
+      process.exit(1);
+    }
+    if (!secrets.RESEND_API_KEY) {
+      log.error('RESEND_API_KEY missing. Refusing to start.');
+      process.exit(1);
+    }
 
-  // Bind explicitly to loopback. The OTP service is reached only by the
-  // bot, on the same VM. Not binding 0.0.0.0 keeps the SMTP-key-holding
-  // process off the public internet even before any firewall rules.
-  app.listen(port, '127.0.0.1', () => log.info({ port }, 'OTP service listening'));
+    const fromEmail = process.env.FROM_EMAIL;
+    if (!fromEmail) {
+      log.error('FROM_EMAIL missing. Refusing to start.');
+      process.exit(1);
+    }
+
+    const port = process.env.OTP_SERVICE_PORT || 3001;
+    const hmacKey = secrets.OTP_HMAC_KEY;
+    const serviceKey = secrets.OTP_SERVICE_KEY;
+
+    const dbPath = path.join(process.cwd(), 'verified.db');
+    const db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('synchronous = NORMAL');
+    db.pragma('foreign_keys = ON');
+    db.pragma('busy_timeout = 5000');
+    runMigrations(db, path.join(__dirname, '..', '..', 'migrations'), log);
+
+    const otpStore = createOtpStore({ db, hmacKey });
+
+    const rateLimits = {
+      user: intFromEnv('OTP_RATE_USER_PER_HOUR', DEFAULT_RATE_LIMITS.user),
+      email: intFromEnv('OTP_RATE_EMAIL_PER_HOUR', DEFAULT_RATE_LIMITS.email),
+      ip: intFromEnv('OTP_RATE_IP_PER_HOUR', DEFAULT_RATE_LIMITS.ip),
+    };
+
+    const sendEmail = createSendOtp({
+      apiKey: secrets.RESEND_API_KEY,
+      fromEmail,
+    });
+
+    const app = createApp({
+      db,
+      otpStore,
+      sendEmail,
+      hmacKey,
+      serviceKey,
+      rateLimits,
+      log,
+    });
+
+    const pruneTimer = setInterval(() => {
+      try {
+        otpStore.pruneExpired();
+      } catch (err) {
+        log.warn({ err }, 'pruneExpired failed');
+      }
+    }, 60 * 1000);
+    pruneTimer.unref();
+
+    app.listen(port, '127.0.0.1', () => log.info({ port }, 'OTP service listening'));
+  })().catch((err) => {
+    log.error({ err }, 'OTP service failed to start');
+    process.exit(1);
+  });
 }
