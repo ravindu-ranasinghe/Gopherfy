@@ -1,10 +1,19 @@
 # Gopherfy
 
+[![CI](https://github.com/ravindu-ranasinghe/umn-discord-verification/actions/workflows/ci.yml/badge.svg)](https://github.com/ravindu-ranasinghe/umn-discord-verification/actions/workflows/ci.yml)
+
 A Discord verification bot that confirms a member owns a real `@umn.edu`
 email address, remembers them, and auto-assigns the "verified" role in
 any server running Gopherfy where that member shows up later.
 
 Built by **Eric He** and **Ravindu Ranasinghe**.
+
+## Secret scanning (GitHub)
+
+Enable **Secret scanning** (and push protection if available) for this
+repository: **Settings → Code security and analysis**. See
+[About secret scanning](https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning).
+CI also runs **gitleaks** on every workflow.
 
 ## What it does
 
@@ -15,7 +24,7 @@ verification** on the panel, enter their `@umn.edu` email, receive a
 matches, the bot stores the link between their Discord account and their
 UMN email and grants the verified role.
 
-The next time that same Discord user joins a *different* server running
+The next time that same Discord user joins a _different_ server running
 Gopherfy, the bot recognizes them from the shared database and assigns
 the verified role automatically — no second email round-trip.
 
@@ -81,7 +90,7 @@ the email on success — the bot never sees the code itself.
 3. OTP service checks the per-user send rate limit (3 per hour).
 4. It generates a 6-digit code with `crypto.randomInt`.
 5. It hands the code to Resend, which delivers the email.
-6. *Only if* Resend accepts the send does the service store the code
+6. _Only if_ Resend accepts the send does the service store the code
    in memory and consume a rate-limit slot. Failed sends leave no
    trace — a legitimate user is never locked out because of an
    upstream email outage.
@@ -110,26 +119,68 @@ Splitting email out of the bot means:
   role changes) without losing in-flight verification attempts — or,
   the reverse, the OTP service can be restarted without dropping the
   bot's connection to Discord.
-- The Resend API key only ever lives in the OTP service's environment.
+- The Resend API key is only used by the OTP service (from `.env` in
+  development, or Secret Manager in production — never by the Discord bot).
 - If Gopherfy ever needs to swap email providers, only one small
   service changes.
 
-The two services authenticate to each other with a shared secret
-(`OTP_SERVICE_KEY`) sent as an `Authorization: Bearer` header and
-compared in constant time. Without the secret, the OTP service refuses
+The two services authenticate to each other with **HMAC-SHA256**
+request signing over the raw JSON body plus a timestamp
+(`OTP_SERVICE_KEY`). Without a valid signature, the OTP service refuses
 every request — so even if the service port is reachable on the host
 network, nobody can request codes to arbitrary addresses or brute-force
 someone else's pending code.
 
+## Production deployment (Google Cloud)
+
+In production (`NODE_ENV=production`), the four sensitive values
+(`DISCORD_TOKEN`, `OTP_SERVICE_KEY`, `OTP_HMAC_KEY`, `RESEND_API_KEY`)
+are read from **Google Cloud Secret Manager** instead of `process.env`.
+
+1. Enable the Secret Manager API on your GCP project.
+2. Create secrets whose **names** match those env keys exactly. Store
+   one value per secret; runtime reads `…/versions/latest` (see
+   **Secret rotation** below).
+3. Create a **service account** for the workload (for example the GCE
+   VM). Grant it `roles/secretmanager.secretAccessor` on each secret
+   (or on the project if you accept broader scope).
+4. **Attach** that service account to the GCE instance. Do **not** pass
+   the four secrets as VM environment variables or in cloud-init. Use
+   env only for non-secret config (`LOG_LEVEL`, `FROM_EMAIL`,
+   `OTP_SERVICE_URL`, rate-limit tuning, `GCP_PROJECT_ID`, etc.).
+5. Set `GCP_PROJECT_ID` on the VM. The Node client uses [Application
+   Default
+   Credentials](https://cloud.google.com/docs/authentication/application-default-credentials);
+   on GCE this is the attached service account. **Do not** deploy a
+   downloaded JSON key file for production.
+
+**Local development:** use `NODE_ENV=development` (or leave unset) and
+keep the four values in `.env` as today; Secret Manager is not used.
+
+`npm run deploy:commands` uses `loadSecrets()` for `DISCORD_TOKEN`; you
+still need `CLIENT_ID` in the environment.
+
+## Secret rotation
+
+Add a **new version** of a secret in the GCP console and retire the old
+version when ready. Gopherfy always reads `versions/latest`, so **restart
+the bot and OTP processes** after rotation to pick up new material.
+
+For some workloads Google recommends **pinning** a specific version
+(e.g. `versions/5`) instead of `latest`, so an accidentally re-enabled
+old version cannot change behavior silently. Gopherfy defaults to
+`latest` for simplicity; if you need pins, adjust the resource path in
+[src/lib/secrets.js](src/lib/secrets.js) and redeploy.
+
 ## Commands
 
-| Command | Who | What |
-|---|---|---|
-| `/setup verified-role:<role>` | Server admins | One-time per-server config |
-| `/verify-panel` | Mods | Post the button-driven verification panel |
-| `/verify [email]` | Everyone | Start verification (slash-command flow) |
-| `/code <digits>` | Everyone | Submit the 6-digit code |
-| `/whois <user>` | Mods | Look up which UMN email a member verified with |
+| Command                       | Who           | What                                           |
+| ----------------------------- | ------------- | ---------------------------------------------- |
+| `/setup verified-role:<role>` | Server admins | One-time per-server config                     |
+| `/verify-panel`               | Mods          | Post the button-driven verification panel      |
+| `/verify [email]`             | Everyone      | Start verification (slash-command flow)        |
+| `/code <digits>`              | Everyone      | Submit the 6-digit code                        |
+| `/whois <user>`               | Mods          | Look up which UMN email a member verified with |
 
 Most users go through the panel's **Start verification** / **Submit
 code** buttons rather than the slash commands directly.

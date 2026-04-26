@@ -1,8 +1,10 @@
 require('dotenv').config();
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
+const log = require('../lib/logger').child({ module: 'deploy' });
+const { loadSecrets } = require('../lib/secrets');
 
-const { DISCORD_TOKEN, CLIENT_ID } = process.env;
+const { CLIENT_ID } = process.env;
 
 const commands = [
   {
@@ -31,7 +33,7 @@ const commands = [
   },
   {
     name: 'whois',
-    description: 'Look up what @umn.edu a user verified with (mods only)',
+    description: 'Check whether a user is verified through Gopherfy (mods only)',
     options: [
       {
         type: 6, // USER
@@ -40,6 +42,15 @@ const commands = [
         required: true,
       },
     ],
+  },
+  {
+    name: 'whois-audit',
+    description: 'Show recent /whois activity grouped by moderator (admins only)',
+  },
+  {
+    name: 'forget-me',
+    description:
+      'Delete your verification record from Gopherfy. Removes verified roles in all Gopherfy servers.',
   },
   {
     name: 'verify-panel',
@@ -59,9 +70,25 @@ const commands = [
   },
 ];
 
-const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+async function main() {
+  const secrets = await loadSecrets();
 
-rest
-  .put(Routes.applicationCommands(CLIENT_ID), { body: commands })
-  .then(() => console.log('Commands registered'))
-  .catch(console.error);
+  if (!CLIENT_ID) {
+    log.error('CLIENT_ID missing. Refusing to register commands.');
+    process.exit(1);
+  }
+  if (!secrets.DISCORD_TOKEN) {
+    log.error('DISCORD_TOKEN missing. Refusing to register commands.');
+    process.exit(1);
+  }
+
+  const rest = new REST({ version: '10' }).setToken(secrets.DISCORD_TOKEN);
+
+  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+  log.info('Commands registered');
+}
+
+main().catch((err) => {
+  log.error({ err }, 'Command registration failed');
+  process.exit(1);
+});
