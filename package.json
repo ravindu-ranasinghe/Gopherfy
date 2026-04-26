@@ -9,6 +9,7 @@
     "deploy:commands": "node src/bot/deploy.js",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
+    "test:integration": "jest --testPathPatterns integration",
     "test:coverage": "jest --coverage --passWithNoTests",
     "lint": "eslint src --max-warnings 0",
     "lint:fix": "eslint src --fix",
