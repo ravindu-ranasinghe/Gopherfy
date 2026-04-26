@@ -22,6 +22,7 @@ const {
   setGuildConfig,
 } = require('./db');
 const { sign: signRequest } = require('../lib/http-signing');
+const { validateUmnEmail, normalize: normalizeEmail } = require('../lib/email');
 const log = require('../lib/logger').child({ module: 'bot' });
 
 const { DISCORD_TOKEN, OTP_SERVICE_URL = 'http://localhost:3001', OTP_SERVICE_KEY } = process.env;
@@ -177,7 +178,7 @@ client.on('interactionCreate', async (interaction) => {
 
       if (commandName === 'verify') {
         const emailOpt = interaction.options.getString('email');
-        const email = emailOpt ? emailOpt.trim().toLowerCase() : '';
+        const email = emailOpt ? normalizeEmail(emailOpt) : '';
 
         const existingRow = getByDiscordId(userId);
         if (existingRow) {
@@ -208,7 +209,7 @@ client.on('interactionCreate', async (interaction) => {
           });
         }
 
-        if (!email || !email.endsWith('@umn.edu')) {
+        if (!email || !validateUmnEmail(email).valid) {
           return interaction.reply({
             content: 'Must be a @umn.edu address.',
             flags: MessageFlags.Ephemeral,
@@ -398,9 +399,9 @@ client.on('interactionCreate', async (interaction) => {
       const userId = interaction.user.id;
 
       if (interaction.customId === 'umn_verify_email_modal') {
-        const email = interaction.fields.getTextInputValue('umn_email').trim().toLowerCase();
+        const email = normalizeEmail(interaction.fields.getTextInputValue('umn_email'));
 
-        if (!email.endsWith('@umn.edu')) {
+        if (!validateUmnEmail(email).valid) {
           return interaction.reply({
             content: 'Must be a @umn.edu address.',
             flags: MessageFlags.Ephemeral,
