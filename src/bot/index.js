@@ -15,11 +15,12 @@ const {
 } = require('discord.js');
 const {
   isVerified,
-  getByEmail,
+  getByEmailHmac,
   getByDiscordId,
-  addVerified,
+  addVerifiedHmac,
   getGuildConfig,
   setGuildConfig,
+  hashEmail,
 } = require('./db');
 const { sign: signRequest } = require('../lib/http-signing');
 const { validateUmnEmail, normalize: normalizeEmail } = require('../lib/email');
@@ -182,16 +183,19 @@ client.on('interactionCreate', async (interaction) => {
 
         const existingRow = getByDiscordId(userId);
         if (existingRow) {
-          if (email && email !== existingRow.email) {
+          // Compare HMACs only -- plaintext email is gone after 004.
+          if (email && existingRow.email_hmac && hashEmail(email) !== existingRow.email_hmac) {
             return interaction.reply({
-              content: `You have verified before with **${existingRow.email}**. Run \`/verify\` with no email, or use that same address.`,
+              content:
+                'You have verified before with a different address. Run `/verify` with no email, or use that same address.',
               flags: MessageFlags.Ephemeral,
             });
           }
           const member = await interaction.guild.members.fetch(userId).catch(() => null);
           if (!member) {
             return interaction.reply({
-              content: `You have verified before! Thank you. (email: **${existingRow.email}**)\nCould not fetch your member record — contact a mod for roles.`,
+              content:
+                'You have verified before! Thank you.\nCould not fetch your member record — contact a mod for roles.',
               flags: MessageFlags.Ephemeral,
             });
           }
@@ -199,12 +203,13 @@ client.on('interactionCreate', async (interaction) => {
             await applyGuildVerificationRoles(member, config);
           } catch {
             return interaction.reply({
-              content: `You have verified before! Thank you. (email: **${existingRow.email}**)\nRole assignment failed — contact a mod.`,
+              content:
+                'You have verified before! Thank you.\nRole assignment failed — contact a mod.',
               flags: MessageFlags.Ephemeral,
             });
           }
           return interaction.reply({
-            content: `You have verified before! Thank you. (email: **${existingRow.email}**)`,
+            content: 'You have verified before! Thank you.',
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -222,7 +227,7 @@ client.on('interactionCreate', async (interaction) => {
         // address is "free", "already linked to a different Discord
         // account", or "already linked to your own account" -- they all
         // look identical from outside.
-        if (getByEmail(email)) {
+        if (getByEmailHmac(hashEmail(email))) {
           log.info({ discordId: userId }, 'verify: email collision, generic response');
           return interaction.editReply(
             'If that email is eligible, a code has been sent. Run /code with the 6-digit code. Expires in 10 minutes.',
@@ -253,11 +258,11 @@ client.on('interactionCreate', async (interaction) => {
         const input = interaction.options.getString('digits').trim();
 
         if (isVerified(userId)) {
-          const row = getByDiscordId(userId);
           const member = await interaction.guild.members.fetch(userId).catch(() => null);
           if (!member) {
             return interaction.reply({
-              content: `You are already verified. (email: **${row.email}**)\nCould not fetch your member record — contact a mod for roles.`,
+              content:
+                'You are already verified.\nCould not fetch your member record — contact a mod for roles.',
               flags: MessageFlags.Ephemeral,
             });
           }
@@ -265,12 +270,12 @@ client.on('interactionCreate', async (interaction) => {
             await applyGuildVerificationRoles(member, config);
           } catch {
             return interaction.reply({
-              content: `You are already verified. (email: **${row.email}**)\nRole assignment failed — contact a mod.`,
+              content: 'You are already verified.\nRole assignment failed — contact a mod.',
               flags: MessageFlags.Ephemeral,
             });
           }
           return interaction.reply({
-            content: `You are already verified. (email: **${row.email}**)`,
+            content: 'You are already verified.',
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -300,7 +305,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const { email } = data;
-        addVerified(userId, email);
+        addVerifiedHmac(userId, hashEmail(email));
 
         const member = await interaction.guild.members.fetch(userId).catch(() => null);
         if (!member) {
@@ -343,7 +348,6 @@ client.on('interactionCreate', async (interaction) => {
           });
         }
 
-        const x500 = row.email.split('@')[0];
         const verifiedAt = new Date(row.verified_at).toLocaleString('en-US', {
           month: 'long',
           day: 'numeric',
@@ -353,8 +357,10 @@ client.on('interactionCreate', async (interaction) => {
           timeZoneName: 'short',
         });
 
+        // Plaintext email is no longer at rest; the minimum-disclosure
+        // redesign in Prompt 12 will harden this further.
         return interaction.reply({
-          content: `🔍 **User:** <@${target.id}>\n📧 **Email:** ${row.email}\n🪪 **x500:** ${x500}\n✅ **Verified:** ${verifiedAt}`,
+          content: `🔍 **User:** <@${target.id}>\n✅ **Verified:** ${verifiedAt}`,
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -423,16 +429,18 @@ client.on('interactionCreate', async (interaction) => {
 
         const existingRow = getByDiscordId(userId);
         if (existingRow) {
-          if (email !== existingRow.email) {
+          if (existingRow.email_hmac && hashEmail(email) !== existingRow.email_hmac) {
             return interaction.reply({
-              content: `You have verified before with **${existingRow.email}**. Enter that same @umn.edu address, or ask a mod for help.`,
+              content:
+                'You have verified before with a different address. Enter that same @umn.edu address, or ask a mod for help.',
               flags: MessageFlags.Ephemeral,
             });
           }
           const member = await interaction.guild.members.fetch(userId).catch(() => null);
           if (!member) {
             return interaction.reply({
-              content: `You have verified before! Thank you. (email: **${existingRow.email}**)\nCould not fetch your member record — contact a mod for roles.`,
+              content:
+                'You have verified before! Thank you.\nCould not fetch your member record — contact a mod for roles.',
               flags: MessageFlags.Ephemeral,
             });
           }
@@ -440,12 +448,13 @@ client.on('interactionCreate', async (interaction) => {
             await applyGuildVerificationRoles(member, guildConfig);
           } catch {
             return interaction.reply({
-              content: `You have verified before! Thank you. (email: **${existingRow.email}**)\nRole assignment failed — contact a mod.`,
+              content:
+                'You have verified before! Thank you.\nRole assignment failed — contact a mod.',
               flags: MessageFlags.Ephemeral,
             });
           }
           return interaction.reply({
-            content: `You have verified before! Thank you. (email: **${existingRow.email}**)`,
+            content: 'You have verified before! Thank you.',
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -453,7 +462,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         // Same enumeration-protection contract as in /verify above.
-        if (getByEmail(email)) {
+        if (getByEmailHmac(hashEmail(email))) {
           log.info({ discordId: userId }, 'modal verify: email collision, generic response');
           return interaction.editReply(
             'If that email is eligible, a code has been sent. Run /code with the 6-digit code. Expires in 10 minutes.',
@@ -496,11 +505,11 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         if (isVerified(userId)) {
-          const row = getByDiscordId(userId);
           const member = await interaction.guild.members.fetch(userId).catch(() => null);
           if (!member) {
             return interaction.reply({
-              content: `You are already verified. (email: **${row.email}**)\nCould not fetch your member record — contact a mod for roles.`,
+              content:
+                'You are already verified.\nCould not fetch your member record — contact a mod for roles.',
               flags: MessageFlags.Ephemeral,
             });
           }
@@ -508,12 +517,12 @@ client.on('interactionCreate', async (interaction) => {
             await applyGuildVerificationRoles(member, config);
           } catch {
             return interaction.reply({
-              content: `You are already verified. (email: **${row.email}**)\nRole assignment failed — contact a mod.`,
+              content: 'You are already verified.\nRole assignment failed — contact a mod.',
               flags: MessageFlags.Ephemeral,
             });
           }
           return interaction.reply({
-            content: `You are already verified. (email: **${row.email}**)`,
+            content: 'You are already verified.',
             flags: MessageFlags.Ephemeral,
           });
         }
@@ -543,7 +552,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const { email } = data;
-        addVerified(userId, email);
+        addVerifiedHmac(userId, hashEmail(email));
 
         const member = await interaction.guild.members.fetch(userId).catch(() => null);
         if (!member) {
