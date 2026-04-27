@@ -48,7 +48,7 @@
     "resend": "^6.12.2"
   },
   "devDependencies": {
-    "eslint": "^8.57.1",
+    "eslint": "^10.2.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-n": "^17.24.0",
     "eslint-plugin-security": "^4.0.0",
