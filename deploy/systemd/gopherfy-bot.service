@@ -1,0 +1,45 @@
+[Unit]
+Description=Gopherfy Discord bot
+After=network.target
+
+[Service]
+Type=simple
+User=gopherfy
+Group=gopherfy
+WorkingDirectory=/opt/gopherfy
+ExecStart=/usr/bin/node /opt/gopherfy/src/bot/index.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=GCP_PROJECT_ID=your-gcp-project-id
+Environment=GOPHERFY_DATA_DIR=/opt/gopherfy/data
+Environment=OTP_SERVICE_URL=http://127.0.0.1:3001
+Environment=LOG_LEVEL=info
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RemoveIPC=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+ReadWritePaths=/opt/gopherfy/data
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
