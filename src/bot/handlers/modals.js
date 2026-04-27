@@ -41,26 +41,23 @@ async function handleEmailModal(interaction, deps) {
         flags: MessageFlags.Ephemeral,
       });
     }
+    // member.fetch is async — defer before it to stay within Discord's 3s window.
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
     if (!member) {
-      return interaction.reply({
+      return interaction.editReply({
         content:
           'You have verified before! Thank you.\nCould not fetch your member record — contact a mod for roles.',
-        flags: MessageFlags.Ephemeral,
       });
     }
     try {
       await applyGuildVerificationRoles(member, guildConfig);
     } catch {
-      return interaction.reply({
+      return interaction.editReply({
         content: 'You have verified before! Thank you.\nRole assignment failed — contact a mod.',
-        flags: MessageFlags.Ephemeral,
       });
     }
-    return interaction.reply({
-      content: 'You have verified before! Thank you.',
-      flags: MessageFlags.Ephemeral,
-    });
+    return interaction.editReply({ content: 'You have verified before! Thank you.' });
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -109,27 +106,25 @@ async function handleCodeModal(interaction, deps) {
     });
   }
 
+  // Defer before any async work — OTP service + member fetch exceed Discord's 3s deadline.
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
   if (db.isVerified(userId)) {
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
     if (!member) {
-      return interaction.reply({
+      return interaction.editReply({
         content:
           'You are already verified.\nCould not fetch your member record — contact a mod for roles.',
-        flags: MessageFlags.Ephemeral,
       });
     }
     try {
       await applyGuildVerificationRoles(member, config);
     } catch {
-      return interaction.reply({
+      return interaction.editReply({
         content: 'You are already verified.\nRole assignment failed — contact a mod.',
-        flags: MessageFlags.Ephemeral,
       });
     }
-    return interaction.reply({
-      content: 'You are already verified.',
-      flags: MessageFlags.Ephemeral,
-    });
+    return interaction.editReply({ content: 'You are already verified.' });
   }
 
   let data;
@@ -137,9 +132,8 @@ async function handleCodeModal(interaction, deps) {
     const res = await postToOtpService('/verify', { discordId: userId, code: input });
     data = await res.json();
   } catch {
-    return interaction.reply({
+    return interaction.editReply({
       content: 'Failed to reach verification service. Try again later.',
-      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -150,9 +144,8 @@ async function handleCodeModal(interaction, deps) {
       wrong_code: 'Wrong code. Try again.',
       too_many_attempts: 'Too many wrong codes. Start verification again from the panel.',
     };
-    return interaction.reply({
+    return interaction.editReply({
       content: messages[data.reason] ?? 'Verification failed. Try again.',
-      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -161,25 +154,20 @@ async function handleCodeModal(interaction, deps) {
 
   const member = await interaction.guild.members.fetch(userId).catch(() => null);
   if (!member) {
-    return interaction.reply({
+    return interaction.editReply({
       content: 'Verified in DB but could not fetch your member record — contact a mod.',
-      flags: MessageFlags.Ephemeral,
     });
   }
 
   try {
     await applyGuildVerificationRoles(member, config);
   } catch {
-    return interaction.reply({
+    return interaction.editReply({
       content: 'Verified in DB but role assignment failed — contact a mod.',
-      flags: MessageFlags.Ephemeral,
     });
   }
 
-  return interaction.reply({
-    content: 'Verified! Welcome to the server.',
-    flags: MessageFlags.Ephemeral,
-  });
+  return interaction.editReply({ content: 'Verified! Welcome to the server.' });
 }
 
 module.exports = { handleEmailModal, handleCodeModal };

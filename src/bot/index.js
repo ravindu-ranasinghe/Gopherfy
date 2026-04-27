@@ -11,21 +11,30 @@ const handlers = require('./handlers');
 /**
  * POST a JSON body to the OTP service with HMAC-SHA256 request signing.
  */
+const OTP_FETCH_TIMEOUT_MS = 8000;
+
 function makePostToOtpService(otpServiceUrl, otpServiceKey) {
   return async function postToOtpService(routePath, payload) {
     const body = JSON.stringify(payload);
     const timestamp = Date.now();
     const signature = signRequest({ secret: otpServiceKey, timestamp, body });
-    const res = await fetch(`${otpServiceUrl}${routePath}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Timestamp': String(timestamp),
-        'X-Signature': signature,
-      },
-      body,
-    });
-    return res;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OTP_FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${otpServiceUrl}${routePath}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Timestamp': String(timestamp),
+          'X-Signature': signature,
+        },
+        body,
+        signal: controller.signal,
+      });
+      return res;
+    } finally {
+      clearTimeout(timer);
+    }
   };
 }
 

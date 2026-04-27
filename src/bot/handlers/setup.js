@@ -15,14 +15,17 @@ async function handle(interaction, deps) {
   }
 
   const verifiedRole = interaction.options.getRole('verified-role');
+
+  // fetchMe() is a network call — defer before it to stay within Discord's 3s window.
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
   const botMember = await interaction.guild.members.fetchMe();
   const botHighest = botMember.roles.highest.position;
 
   if (verifiedRole.position >= botHighest) {
-    return interaction.reply({
+    return interaction.editReply({
       content:
         "❌ The bot's role must be above the selected verified role in the server's role list. Please drag the bot's role higher and try again.",
-      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -31,9 +34,8 @@ async function handle(interaction, deps) {
   // re-using the verified role id.
   db.setGuildConfig(interaction.guild.id, verifiedRole.id, verifiedRole.id);
 
-  return interaction.reply({
+  return interaction.editReply({
     content: `✅ **Setup complete!**\n- Verified role: <@&${verifiedRole.id}>\n- Everyone else remains under \`@everyone\` permissions until verified.\n\nPost a verification panel with \`/verify-panel\``,
-    flags: MessageFlags.Ephemeral,
   });
 }
 
