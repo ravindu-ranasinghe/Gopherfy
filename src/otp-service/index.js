@@ -63,6 +63,7 @@ function createApp(deps) {
   }
 
   const app = express();
+  app.disable('x-powered-by');
 
   // Capture req.rawBody so the signature verifier sees the EXACT bytes
   // the client signed. A re-stringified req.body could differ in

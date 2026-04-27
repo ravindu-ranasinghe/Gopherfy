@@ -39,26 +39,23 @@ async function handle(interaction, deps) {
         flags: MessageFlags.Ephemeral,
       });
     }
+    // member.fetch is async — defer before it to stay within Discord's 3s window.
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
     if (!member) {
-      return interaction.reply({
+      return interaction.editReply({
         content:
           'You have verified before! Thank you.\nCould not fetch your member record — contact a mod for roles.',
-        flags: MessageFlags.Ephemeral,
       });
     }
     try {
       await applyGuildVerificationRoles(member, guildConfig);
     } catch {
-      return interaction.reply({
+      return interaction.editReply({
         content: 'You have verified before! Thank you.\nRole assignment failed — contact a mod.',
-        flags: MessageFlags.Ephemeral,
       });
     }
-    return interaction.reply({
-      content: 'You have verified before! Thank you.',
-      flags: MessageFlags.Ephemeral,
-    });
+    return interaction.editReply({ content: 'You have verified before! Thank you.' });
   }
 
   if (!email || !validateUmnEmail(email).valid) {

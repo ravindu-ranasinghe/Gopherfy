@@ -48,6 +48,10 @@ async function handleForgetMeConfirm(interaction, deps) {
   const { db, log, client } = deps;
   const userId = interaction.user.id;
 
+  // Defer immediately — the per-guild member.fetch + role removal loop can
+  // span many guilds and will blow past Discord's 3s deadline without this.
+  await interaction.deferUpdate();
+
   db.deleteVerified(userId);
   db.insertDeletionAudit(userId, 'user_request');
 
@@ -66,7 +70,7 @@ async function handleForgetMeConfirm(interaction, deps) {
     }
   }
 
-  return interaction.update({
+  return interaction.editReply({
     content: 'Your verification record has been deleted. You may re-verify any time.',
     components: [],
   });
