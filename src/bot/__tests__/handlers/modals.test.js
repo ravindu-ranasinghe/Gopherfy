@@ -83,7 +83,7 @@ describe('umn_verify_email_modal', () => {
     });
     await modals.handleEmailModal(interaction, deps);
     expect(deps.postToOtpService).not.toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('verified before') }),
     );
   });
@@ -154,7 +154,7 @@ describe('umn_verify_code_modal', () => {
     await modals.handleCodeModal(interaction, deps);
     expect(deps.db.addVerifiedHmac).toHaveBeenCalled();
     expect(deps.applyGuildVerificationRoles).toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('Verified! Welcome') }),
     );
   });
@@ -170,7 +170,7 @@ describe('umn_verify_code_modal', () => {
         .mockResolvedValue({ json: async () => ({ ok: false, reason: 'wrong_code' }) }),
     });
     await modals.handleCodeModal(interaction, deps);
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('Wrong code') }),
     );
   });
@@ -188,7 +188,7 @@ describe('umn_verify_code_modal', () => {
     });
     await modals.handleCodeModal(interaction, deps);
     expect(deps.postToOtpService).not.toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('already verified') }),
     );
   });

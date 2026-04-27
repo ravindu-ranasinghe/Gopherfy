@@ -56,7 +56,7 @@ describe('forget_me_confirm button', () => {
     const g1 = cache.get('g1');
     expect(g1.members.fetch).toHaveBeenCalledWith('user1');
     expect(g1._member.roles.remove).toHaveBeenCalledWith('role-g1');
-    expect(interaction.update).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({
         content: expect.stringContaining('has been deleted'),
         components: [],
@@ -95,7 +95,7 @@ describe('forget_me_confirm button', () => {
     expect(deps.db.deleteVerified).toHaveBeenCalled();
     expect(deps.db.insertDeletionAudit).toHaveBeenCalled();
     expect(goodMember.roles.remove).toHaveBeenCalled();
-    expect(interaction.update).toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalled();
   });
 });
 
