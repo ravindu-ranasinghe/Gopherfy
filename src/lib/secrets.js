@@ -66,7 +66,6 @@ async function loadSecrets({ env = process.env, client, projectId } = {}) {
   let smClient = client;
   if (!smClient) {
     // Lazy-require so dev/test runs don't need the heavy GRPC client.
-    // eslint-disable-next-line n/no-missing-require
     const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
     smClient = new SecretManagerServiceClient();
   }
@@ -75,7 +74,7 @@ async function loadSecrets({ env = process.env, client, projectId } = {}) {
     try {
       result[name] = await fetchFromSecretManager(smClient, pid, name);
     } catch (err) {
-      throw new Error(`failed to load secret ${name}: ${err.message}`);
+      throw new Error(`failed to load secret ${name}: ${err.message}`, { cause: err });
     }
     if (!result[name]) {
       throw new Error(`secret ${name} resolved to empty string`);
