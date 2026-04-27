@@ -11,7 +11,7 @@ jobs:
     name: lint + format + test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -41,7 +41,7 @@ jobs:
     name: npm audit (high+critical)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
