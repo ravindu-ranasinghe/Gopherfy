@@ -48,11 +48,13 @@
     "resend": "^6.12.2"
   },
   "devDependencies": {
-    "eslint": "^8.57.1",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.2.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-n": "^17.24.0",
     "eslint-plugin-security": "^4.0.0",
     "fast-check": "^4.7.0",
+    "globals": "^17.5.0",
     "husky": "^9.1.7",
     "jest": "^30.3.0",
     "lint-staged": "^16.4.0",
@@ -62,7 +64,7 @@
   },
   "lint-staged": {
     "*.js": [
-      "eslint --max-warnings 0 --no-warn-ignored",
+      "eslint --max-warnings 0",
       "prettier --write"
     ],
     "*.{md,yml,yaml,json}": [
