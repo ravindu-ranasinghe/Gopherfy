@@ -16,21 +16,24 @@ async function handle(interaction, deps) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   if (db.isVerified(userId)) {
+    const row = db.getByDiscordId(userId);
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
     if (!member) {
       return interaction.editReply({
         content:
-          'You are already verified.\nCould not fetch your member record — contact a mod for roles.',
+          `You are already verified.${row?.email ? ` (email: **${row.email}**)` : ''}\nCould not fetch your member record — contact a mod for roles.`,
       });
     }
     try {
       await applyGuildVerificationRoles(member, guildConfig);
     } catch {
       return interaction.editReply({
-        content: 'You are already verified.\nRole assignment failed — contact a mod.',
+        content: `You are already verified.${row?.email ? ` (email: **${row.email}**)` : ''}\nRole assignment failed — contact a mod.`,
       });
     }
-    return interaction.editReply({ content: 'You are already verified.' });
+    return interaction.editReply({
+      content: `You are already verified.${row?.email ? ` (email: **${row.email}**)` : ''}`,
+    });
   }
 
   let data;
@@ -56,7 +59,7 @@ async function handle(interaction, deps) {
   }
 
   const { email } = data;
-  db.addVerifiedHmac(userId, db.hashEmail(email));
+  db.addVerifiedHmac(userId, db.hashEmail(email), email);
 
   const member = await interaction.guild.members.fetch(userId).catch(() => null);
   if (!member) {
