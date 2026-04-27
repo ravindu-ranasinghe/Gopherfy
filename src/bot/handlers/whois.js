@@ -1,9 +1,9 @@
 const { MessageFlags } = require('discord.js');
 
 /**
- * /whois -- minimum-disclosure verified-yes/no lookup with audit + a
- * 30/hour per-mod rate limit. Permission gate accepts ManageGuild OR
- * ModerateMembers (defense in depth beyond setDefaultMemberPermissions).
+ * /whois -- verified lookup with audit + a 30/hour per-mod rate limit.
+ * Permission gate accepts ManageGuild OR ModerateMembers (defense in
+ * depth beyond setDefaultMemberPermissions).
  */
 async function handle(interaction, deps) {
   const { db } = deps;
@@ -52,9 +52,9 @@ async function handle(interaction, deps) {
   return interaction.reply({
     content:
       `<@${target.id}> · ✅ Verified (UMN affiliation confirmed)\n` +
+      `Email: ${row.email ? `**${row.email}**` : '*Unavailable (legacy record)*'}\n` +
       `Verified at: ${verifiedAt}\n` +
-      'Note: email addresses are not retrievable from this bot. ' +
-      "If you need the email for moderation, use Discord's ToS-aligned escalation process.",
+      'x500: ' + (row.email ? row.email.split('@')[0] : 'Unavailable'),
     flags: MessageFlags.Ephemeral,
   });
 }

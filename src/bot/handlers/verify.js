@@ -45,17 +45,19 @@ async function handle(interaction, deps) {
     if (!member) {
       return interaction.editReply({
         content:
-          'You have verified before! Thank you.\nCould not fetch your member record — contact a mod for roles.',
+          `You have verified before! Thank you.${existingRow.email ? ` (email: **${existingRow.email}**)` : ''}\nCould not fetch your member record — contact a mod for roles.`,
       });
     }
     try {
       await applyGuildVerificationRoles(member, guildConfig);
     } catch {
       return interaction.editReply({
-        content: 'You have verified before! Thank you.\nRole assignment failed — contact a mod.',
+        content: `You have verified before! Thank you.${existingRow.email ? ` (email: **${existingRow.email}**)` : ''}\nRole assignment failed — contact a mod.`,
       });
     }
-    return interaction.editReply({ content: 'You have verified before! Thank you.' });
+    return interaction.editReply({
+      content: `You have verified before! Thank you.${existingRow.email ? ` (email: **${existingRow.email}**)` : ''}`,
+    });
   }
 
   if (!email || !validateUmnEmail(email).valid) {

@@ -38,7 +38,7 @@ function createBotDb(hmacKey) {
   const stmtGetByEmailHmac = db.prepare('SELECT * FROM verified_users WHERE email_hmac = ?');
   const stmtGetByDiscordId = db.prepare('SELECT * FROM verified_users WHERE discord_id = ?');
   const stmtAddVerifiedHmac = db.prepare(
-    'INSERT OR IGNORE INTO verified_users (discord_id, email_hmac, verified_at) VALUES (?, ?, ?)',
+    'INSERT OR IGNORE INTO verified_users (discord_id, email_hmac, email, verified_at) VALUES (?, ?, ?, ?)',
   );
   const stmtDeleteVerified = db.prepare('DELETE FROM verified_users WHERE discord_id = ?');
   const stmtGetGuildConfig = db.prepare('SELECT * FROM guild_config WHERE guild_id = ?');
@@ -86,8 +86,8 @@ function createBotDb(hmacKey) {
     return stmtGetByDiscordId.get(discordId);
   }
 
-  function addVerifiedHmac(discordId, emailHmacHex) {
-    return stmtAddVerifiedHmac.run(discordId, emailHmacHex, Date.now());
+  function addVerifiedHmac(discordId, emailHmacHex, email) {
+    return stmtAddVerifiedHmac.run(discordId, emailHmacHex, email || null, Date.now());
   }
 
   function deleteVerified(discordId) {
