@@ -6,3 +6,5 @@ node_modules/
 coverage/
 .DS_Store
 *Cursor_runbook.md
+HOW_IT_WORKS.md
+CODE_GUIDE.md
