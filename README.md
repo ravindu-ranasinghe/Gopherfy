@@ -1,6 +1,6 @@
 # Gopherfy
 
-[![CI](https://github.com/ravindu-ranasinghe/umn-discord-verification/actions/workflows/ci.yml/badge.svg)](https://github.com/ravindu-ranasinghe/umn-discord-verification/actions/workflows/ci.yml)
+[![CI](https://github.com/ravindu-ranasinghe/Gopherfy/actions/workflows/ci.yml/badge.svg)](https://github.com/ravindu-ranasinghe/Gopherfy/actions/workflows/ci.yml)
 
 A Discord verification bot that confirms a member owns a real `@umn.edu`
 email address, remembers them, and auto-assigns the "verified" role in
@@ -39,7 +39,7 @@ defined in [src/bot/db.js](src/bot/db.js):
 ```sql
 CREATE TABLE verified_users (
   discord_id  TEXT PRIMARY KEY,
-  email       TEXT UNIQUE,
+  email_hmac  TEXT UNIQUE,
   verified_at INTEGER
 );
 
@@ -53,9 +53,13 @@ CREATE TABLE guild_config (
 
 `verified_users` is the cross-server memory. `discord_id` is the
 primary key so each Discord account can only ever be linked to one
-email, and `email UNIQUE` ensures the reverse — one UMN identity can
-only verify one Discord account. Attempts to reuse an email on a second
-account are rejected by the bot before an OTP is even sent.
+email, and `email_hmac UNIQUE` ensures the reverse — one UMN identity
+can only verify one Discord account. Gopherfy never stores the
+plaintext email address; it stores an HMAC-SHA256 digest
+(`OTP_HMAC_KEY`) so the database contains no PII. Attempts to reuse an
+email on a second account are still caught — the bot computes the HMAC
+of the submitted address and checks for a collision before an OTP is
+even sent.
 
 `guild_config` stores per-server settings — which role to grant after
 verification — set by an admin running `/setup`.
@@ -174,16 +178,34 @@ old version cannot change behavior silently. Gopherfy defaults to
 
 ## Commands
 
-| Command                       | Who           | What                                           |
-| ----------------------------- | ------------- | ---------------------------------------------- |
-| `/setup verified-role:<role>` | Server admins | One-time per-server config                     |
-| `/verify-panel`               | Mods          | Post the button-driven verification panel      |
-| `/verify [email]`             | Everyone      | Start verification (slash-command flow)        |
-| `/code <digits>`              | Everyone      | Submit the 6-digit code                        |
-| `/whois <user>`               | Mods          | Look up which UMN email a member verified with |
+| Command                       | Who           | What                                                      |
+| ----------------------------- | ------------- | --------------------------------------------------------- |
+| `/setup verified-role:<role>` | Server admins | One-time per-server config                                |
+| `/verify-panel`               | Mods          | Post the button-driven verification panel                 |
+| `/verify [email]`             | Everyone      | Start verification (slash-command flow)                   |
+| `/code <digits>`              | Everyone      | Submit the 6-digit code                                   |
+| `/whois <user>`               | Mods          | Look up which UMN email a member verified with            |
+| `/whois-audit`                | Server admins | Show recent `/whois` lookups grouped by moderator         |
+| `/forget-me`                  | Everyone      | Delete your verification record and remove verified roles |
 
 Most users go through the panel's **Start verification** / **Submit
 code** buttons rather than the slash commands directly.
+
+## Development
+
+**Local CI parity** — before pushing, run:
+
+```bash
+npm run verify
+```
+
+This runs `npm ci → lint → format:check → test --ci → audit`, mirroring
+the three CI jobs exactly. If it's green locally it will be green in CI.
+
+A **pre-push hook** (`.husky/pre-push`) runs `npm run verify`
+automatically on every `git push`, blocking the push if any check fails.
+Use `git push --no-verify` to bypass when genuinely needed (e.g. a
+work-in-progress draft push).
 
 ## Authors
 

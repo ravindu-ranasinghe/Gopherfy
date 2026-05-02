@@ -24,7 +24,7 @@ describe('/setup handler', () => {
     });
     const deps = createMockDeps();
     await setup.handle(interaction, deps);
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining("bot's role") }),
     );
     expect(deps.db.setGuildConfig).not.toHaveBeenCalled();
@@ -39,7 +39,7 @@ describe('/setup handler', () => {
     const deps = createMockDeps();
     await setup.handle(interaction, deps);
     expect(deps.db.setGuildConfig).toHaveBeenCalledWith('guild1', 'r1', 'r1');
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('Setup complete') }),
     );
   });

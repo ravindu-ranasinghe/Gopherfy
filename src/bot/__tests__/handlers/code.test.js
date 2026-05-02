@@ -27,7 +27,7 @@ describe('/code handler', () => {
     await code.handle(interaction, deps);
     expect(deps.db.addVerifiedHmac).toHaveBeenCalledWith('user1', 'hmac:a@umn.edu');
     expect(deps.applyGuildVerificationRoles).toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('Verified! Welcome') }),
     );
   });
@@ -40,7 +40,7 @@ describe('/code handler', () => {
         .mockResolvedValue({ json: async () => ({ ok: false, reason: 'wrong_code' }) }),
     });
     await code.handle(interaction, deps);
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('Wrong code') }),
     );
     expect(deps.db.addVerifiedHmac).not.toHaveBeenCalled();
@@ -54,7 +54,7 @@ describe('/code handler', () => {
         .mockResolvedValue({ json: async () => ({ ok: false, reason: 'expired' }) }),
     });
     await code.handle(interaction, deps);
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('expired') }),
     );
   });
@@ -67,7 +67,7 @@ describe('/code handler', () => {
         .mockResolvedValue({ json: async () => ({ ok: false, reason: 'too_many_attempts' }) }),
     });
     await code.handle(interaction, deps);
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('Too many wrong codes') }),
     );
   });
@@ -85,7 +85,7 @@ describe('/code handler', () => {
     });
     await code.handle(interaction, deps);
     expect(deps.db.addVerifiedHmac).toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({
         content: expect.stringContaining('role assignment failed'),
       }),
@@ -103,7 +103,7 @@ describe('/code handler', () => {
     });
     await code.handle(interaction, deps);
     expect(deps.db.addVerifiedHmac).toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({
         content: expect.stringContaining('could not fetch your member record'),
       }),
@@ -116,7 +116,7 @@ describe('/code handler', () => {
       postToOtpService: jest.fn().mockRejectedValue(new Error('econnrefused')),
     });
     await code.handle(interaction, deps);
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('Failed to reach') }),
     );
   });
@@ -131,7 +131,7 @@ describe('/code handler', () => {
     });
     await code.handle(interaction, deps);
     expect(deps.postToOtpService).not.toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('already verified') }),
     );
   });

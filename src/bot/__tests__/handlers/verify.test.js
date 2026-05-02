@@ -26,7 +26,7 @@ describe('/verify handler', () => {
     });
     await verify.handle(interaction, deps);
     expect(deps.postToOtpService).not.toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalledWith(
+    expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('verified before') }),
     );
   });
