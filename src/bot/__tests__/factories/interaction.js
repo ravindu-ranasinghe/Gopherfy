@@ -51,6 +51,7 @@ function buildBaseInteraction({
     deferred: false,
     reply: jest.fn().mockResolvedValue(),
     deferReply: jest.fn().mockResolvedValue(),
+    deferUpdate: jest.fn().mockResolvedValue(),
     editReply: jest.fn().mockResolvedValue(),
     update: jest.fn().mockResolvedValue(),
     showModal: jest.fn().mockResolvedValue(),
