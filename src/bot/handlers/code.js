@@ -20,8 +20,7 @@ async function handle(interaction, deps) {
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
     if (!member) {
       return interaction.editReply({
-        content:
-          `You are already verified.${row?.email ? ` (email: **${row.email}**)` : ''}\nCould not fetch your member record — contact a mod for roles.`,
+        content: `You are already verified.${row?.email ? ` (email: **${row.email}**)` : ''}\nCould not fetch your member record — contact a mod for roles.`,
       });
     }
     try {
