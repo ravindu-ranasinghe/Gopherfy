@@ -25,7 +25,7 @@ describe('/code handler', () => {
         .mockResolvedValue({ json: async () => ({ ok: true, email: 'a@umn.edu' }) }),
     });
     await code.handle(interaction, deps);
-    expect(deps.db.addVerifiedHmac).toHaveBeenCalledWith('user1', 'hmac:a@umn.edu');
+    expect(deps.db.addVerifiedHmac).toHaveBeenCalledWith('user1', 'hmac:a@umn.edu', 'a@umn.edu');
     expect(deps.applyGuildVerificationRoles).toHaveBeenCalled();
     expect(interaction.editReply).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining('Verified! Welcome') }),
