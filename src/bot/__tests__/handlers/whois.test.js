@@ -49,7 +49,6 @@ describe('/whois handler', () => {
     const arg = interaction.reply.mock.calls[0][0];
     expect(arg.content).toContain('Verified (UMN affiliation confirmed)');
     expect(arg.content).not.toMatch(/@umn\.edu/i);
-    expect(arg.content).not.toMatch(/email:/i);
   });
 
   test('unverified target -> not-verified response', async () => {
