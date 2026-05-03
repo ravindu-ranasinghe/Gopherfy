@@ -114,14 +114,14 @@ describe('backfillEmailHmac (legacy DB)', () => {
   });
 });
 
-describe('migration 004 actually drops the email column', () => {
-  test('email column is gone after running all migrations', () => {
+describe('verified_users schema after all migrations', () => {
+  test('email_hmac present; email restored by migration 007', () => {
     const db = freshDb();
     const cols = db
       .prepare("PRAGMA table_info('verified_users')")
       .all()
       .map((c) => c.name);
     expect(cols).toContain('email_hmac');
-    expect(cols).not.toContain('email');
+    expect(cols).toContain('email');
   });
 });

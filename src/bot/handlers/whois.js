@@ -54,7 +54,8 @@ async function handle(interaction, deps) {
       `<@${target.id}> · ✅ Verified (UMN affiliation confirmed)\n` +
       `Email: ${row.email ? `**${row.email}**` : '*Unavailable (legacy record)*'}\n` +
       `Verified at: ${verifiedAt}\n` +
-      'x500: ' + (row.email ? row.email.split('@')[0] : 'Unavailable'),
+      'x500: ' +
+      (row.email ? row.email.split('@')[0] : 'Unavailable'),
     flags: MessageFlags.Ephemeral,
   });
 }
