@@ -76,7 +76,7 @@ async function handle(interaction, deps) {
   if (db.getByEmailHmac(db.hashEmail(email))) {
     log.info({ discordId: userId }, 'verify: email collision, generic response');
     return interaction.editReply(
-      'If that email is eligible, a code has been sent. Run /code with the 6-digit code. Expires in 10 minutes.',
+      'If that email is eligible, a code has been sent. Check your inbox (and spam/junk folder) and run /code with the 6-digit code. Expires in 10 minutes.',
     );
   }
 
@@ -86,7 +86,7 @@ async function handle(interaction, deps) {
 
     if (data.ok) {
       return interaction.editReply(
-        'If that email is eligible, a code has been sent. Run /code with the 6-digit code. Expires in 10 minutes.',
+        'If that email is eligible, a code has been sent. Check your inbox (and spam/junk folder) and run /code with the 6-digit code. Expires in 10 minutes.',
       );
     }
     if (data.reason === 'rate_limited') {
