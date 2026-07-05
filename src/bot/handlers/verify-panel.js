@@ -22,7 +22,8 @@ async function handle(interaction) {
       '**Gopherfy** verifies **@umn.edu** addresses for this server.\n\n' +
         '1) Click **Start verification** and enter your **@umn.edu** email.\n' +
         '2) Check your inbox for a **6-digit code**.\n' +
-        '3) Click **Submit code** and enter the code.',
+        '3) Click **Submit code** and enter the code.\n\n' +
+        "*Don't see the email? Check your spam/junk folder.*",
     );
 
   const row = new ActionRowBuilder().addComponents(

@@ -66,7 +66,7 @@ async function handleEmailModal(interaction, deps) {
   if (db.getByEmailHmac(db.hashEmail(email))) {
     log.info({ discordId: userId }, 'modal verify: email collision, generic response');
     return interaction.editReply(
-      'If that email is eligible, a code has been sent. Run /code with the 6-digit code. Expires in 10 minutes.',
+      "If that email is eligible, a code has been sent. Check your inbox (and spam/junk folder) and run /code with the 6-digit code. Expires in 10 minutes.",
     );
   }
 
@@ -89,7 +89,7 @@ async function handleEmailModal(interaction, deps) {
   }
 
   return interaction.editReply({
-    content: `Code sent to **${email}**. Go back to the verification panel message in this channel and click **Submit code** (expires in 10 minutes).`,
+    content: `Code sent to **${email}**. Check your inbox (and spam/junk folder), then go back to the verification panel and click **Submit code** (expires in 10 minutes).`,
   });
 }
 
