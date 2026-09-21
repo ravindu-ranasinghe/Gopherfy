@@ -64,7 +64,7 @@ describe('/setup handler', () => {
   });
 });
 
-describe('/setup grandfather-existing flag', () => {
+describe('/setup role-all-members flag', () => {
   test('flag omitted -> success reply carries no buttons', async () => {
     const interaction = createMockChatInputInteraction({
       commandName: 'setup',
@@ -83,7 +83,7 @@ describe('/setup grandfather-existing flag', () => {
   test('flag true -> success reply carries confirm/cancel buttons and the member count', async () => {
     const interaction = createMockChatInputInteraction({
       commandName: 'setup',
-      options: { 'verified-role': { id: 'r1', position: 1 }, 'grandfather-existing': true },
+      options: { 'verified-role': { id: 'r1', position: 1 }, 'role-all-members': true },
       permissions: ['Administrator'],
       guildOverrides: grandfatherGuild({ memberCount: 412 }),
     });
@@ -102,7 +102,7 @@ describe('/setup grandfather-existing flag', () => {
   test('flag true but bot lacks ManageRoles -> no buttons, says the backfill cannot run', async () => {
     const interaction = createMockChatInputInteraction({
       commandName: 'setup',
-      options: { 'verified-role': { id: 'r1', position: 1 }, 'grandfather-existing': true },
+      options: { 'verified-role': { id: 'r1', position: 1 }, 'role-all-members': true },
       permissions: ['Administrator'],
       guildOverrides: grandfatherGuild({ manageRoles: false }),
     });
