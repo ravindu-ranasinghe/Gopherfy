@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly Gopherfy SQLite backup
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
