@@ -31,10 +31,144 @@ the verified role automatically — no second email round-trip.
 Mods can run `/whois @user` to see which `@umn.edu` address a member
 verified with.
 
+## Architecture
+
+```mermaid
+flowchart TD
+
+subgraph group_discord["Discord Interface"]
+  node_discord_platform["Discord Platform"]
+  node_bot_runtime["Bot Runtime<br/>[index.js]"]
+end
+
+subgraph group_bot["Bot Workflows"]
+  node_dispatcher["Interaction Dispatcher<br/>[handlers/index.js]"]
+  node_setup_handler["Setup Handler<br/>[setup.js]"]
+  node_panel_handler["Panel Handler<br/>[verify-panel.js]"]
+  node_verify_handler["Verify Handler<br/>[verify.js]"]
+  node_code_handler["Code Handler<br/>[code.js]"]
+  node_button_handler["Button Handler<br/>[buttons.js]"]
+  node_modal_handler["Modal Handler<br/>[modals.js]"]
+  node_whois_handler["Whois Handler<br/>[whois.js]"]
+  node_audit_handler["Whois Audit<br/>[whois-audit.js]"]
+  node_forget_handler["Forget Handler<br/>[forget-me.js]"]
+  node_backfill["Role Backfill Engine<br/>[grandfather.js]"]
+  node_role_assignment["Role Assignment<br/>[index.js]"]
+end
+
+subgraph group_otp["OTP Service"]
+  node_otp_api["OTP HTTP API<br/>[index.js]"]
+  node_otp_store[("OTP Store<br/>[otp.js]")]
+  node_email_sender["Email Sender<br/>[email.js]"]
+end
+
+subgraph group_data["Data Security"]
+  node_email_validator["UMN Email Validator<br/>[email.js]"]
+  node_verification_db[("Verification Database<br/>[db.js]")]
+  node_migration_runner["Migration Runner<br/>[migrations.js]"]
+  node_http_signer["HTTP Signer<br/>[http-signing.js]"]
+  node_secret_loader["Secret Loader<br/>[secrets.js]"]
+end
+
+subgraph group_external["External Services"]
+  node_resend["Resend Email API"]
+  node_secret_manager["Google Secret Manager"]
+end
+
+node_member(("Discord Member"))
+node_moderator(("Moderator Admin"))
+
+node_member -->|"starts interaction"| node_discord_platform
+node_moderator -->|"runs commands"| node_discord_platform
+node_discord_platform -->|"dispatches events"| node_bot_runtime
+node_bot_runtime -->|"dispatches interactions"| node_dispatcher
+node_dispatcher -->|"routes setup"| node_setup_handler
+node_dispatcher -->|"routes panel"| node_panel_handler
+node_dispatcher -->|"routes verify"| node_verify_handler
+node_dispatcher -->|"routes code"| node_code_handler
+node_dispatcher -->|"routes buttons"| node_button_handler
+node_dispatcher -->|"routes modals"| node_modal_handler
+node_dispatcher -->|"routes whois"| node_whois_handler
+node_dispatcher -->|"routes audit"| node_audit_handler
+node_dispatcher -->|"routes deletion"| node_forget_handler
+node_setup_handler -->|"writes config"| node_verification_db
+node_verify_handler -->|"validates email"| node_email_validator
+node_verify_handler -->|"checks identity"| node_verification_db
+node_verify_handler -->|"requests OTP"| node_otp_api
+node_code_handler -->|"submits code"| node_otp_api
+node_button_handler -->|"runs backfill"| node_backfill
+node_button_handler -->|"deletes identity"| node_verification_db
+node_backfill -->|"grants roles in bulk"| node_discord_platform
+node_modal_handler -->|"validates email"| node_email_validator
+node_modal_handler -->|"checks identity"| node_verification_db
+node_modal_handler -->|"sends or verifies"| node_otp_api
+node_modal_handler -->|"stores verification"| node_verification_db
+node_whois_handler -->|"reads identity"| node_verification_db
+node_audit_handler -->|"reads audit"| node_verification_db
+node_forget_handler -->|"deletes identity"| node_verification_db
+node_bot_runtime -->|"checks joins"| node_verification_db
+node_bot_runtime -->|"assigns roles"| node_role_assignment
+node_code_handler -->|"assigns role"| node_role_assignment
+node_modal_handler -->|"assigns role"| node_role_assignment
+node_role_assignment -->|"updates roles"| node_discord_platform
+node_otp_api -->|"verifies requests"| node_http_signer
+node_bot_runtime -->|"signs requests"| node_http_signer
+node_otp_api -->|"stores and checks"| node_otp_store
+node_otp_api -->|"sends code"| node_email_sender
+node_email_sender -->|"delivers email"| node_resend
+node_otp_store -->|"writes otp_pending rows"| node_verification_db
+node_verification_db -->|"runs migrations"| node_migration_runner
+node_otp_api -->|"runs migrations"| node_migration_runner
+node_bot_runtime -->|"loads secrets"| node_secret_loader
+node_otp_api -->|"loads secrets"| node_secret_loader
+node_secret_loader -.->|"reads secrets (production only)"| node_secret_manager
+
+click node_bot_runtime "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/index.js"
+click node_dispatcher "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/handlers/index.js"
+click node_setup_handler "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/handlers/setup.js"
+click node_panel_handler "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/handlers/verify-panel.js"
+click node_verify_handler "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/handlers/verify.js"
+click node_code_handler "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/handlers/code.js"
+click node_button_handler "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/handlers/buttons.js"
+click node_modal_handler "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/handlers/modals.js"
+click node_whois_handler "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/handlers/whois.js"
+click node_audit_handler "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/handlers/whois-audit.js"
+click node_forget_handler "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/handlers/forget-me.js"
+click node_backfill "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/grandfather.js"
+click node_role_assignment "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/index.js"
+click node_email_validator "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/lib/email.js"
+click node_otp_api "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/otp-service/index.js"
+click node_otp_store "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/otp-service/otp.js"
+click node_email_sender "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/otp-service/email.js"
+click node_verification_db "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/bot/db.js"
+click node_migration_runner "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/lib/migrations.js"
+click node_http_signer "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/lib/http-signing.js"
+click node_secret_loader "https://github.com/ravindu-ranasinghe/Gopherfy/blob/main/src/lib/secrets.js"
+
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+class node_discord_platform,node_bot_runtime toneBlue
+class node_dispatcher,node_setup_handler,node_panel_handler,node_verify_handler,node_code_handler,node_button_handler,node_modal_handler,node_whois_handler,node_audit_handler,node_forget_handler,node_backfill,node_role_assignment toneAmber
+class node_otp_api,node_otp_store,node_email_sender toneMint
+class node_email_validator,node_verification_db,node_migration_runner,node_http_signer,node_secret_loader toneRose
+class node_resend,node_secret_manager,node_member,node_moderator toneIndigo
+```
+
+Both processes open the **same** `verified.db` file; the OTP service owns
+`otp_pending` and `otp_send_counter`, the bot owns everything else. Each
+runs the migration runner at startup, so whichever boots first brings the
+schema up to date.
+
 ## How users are stored
 
-Gopherfy uses a single SQLite database (`verified.db`) with two tables,
-defined in [src/bot/db.js](src/bot/db.js):
+Gopherfy uses a single SQLite database (`verified.db`). The two tables
+below carry the identity model and are defined in
+[src/bot/db.js](src/bot/db.js); the rest of the schema
+(`otp_pending`, `otp_send_counter`, `whois_audit`, `deletion_audit`)
+lives in [migrations/](migrations):
 
 ```sql
 CREATE TABLE verified_users (
@@ -178,15 +312,15 @@ old version cannot change behavior silently. Gopherfy defaults to
 
 ## Commands
 
-| Command                       | Who           | What                                                      |
-| ----------------------------- | ------------- | --------------------------------------------------------- |
-| `/setup verified-role:<role>` | Server admins | One-time per-server config                                |
-| `/verify-panel`               | Mods          | Post the button-driven verification panel                 |
-| `/verify [email]`             | Everyone      | Start verification (slash-command flow)                   |
-| `/code <digits>`              | Everyone      | Submit the 6-digit code                                   |
-| `/whois <user>`               | Mods          | Look up which UMN email a member verified with            |
-| `/whois-audit`                | Server admins | Show recent `/whois` lookups grouped by moderator         |
-| `/forget-me`                  | Everyone      | Delete your verification record and remove verified roles |
+| Command                                                 | Who           | What                                                                                                                                                                                                                                          |
+| ------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/setup verified-role:<role> [role-all-members:<bool>]` | Server admins | One-time per-server config. `role-all-members: true` adds a confirm step that grants the verified role to every current member of **that server only** — it writes nothing to the database, so those members still verify normally elsewhere. |
+| `/verify-panel`                                         | Mods          | Post the button-driven verification panel                                                                                                                                                                                                     |
+| `/verify [email]`                                       | Everyone      | Start verification (slash-command flow)                                                                                                                                                                                                       |
+| `/code <digits>`                                        | Everyone      | Submit the 6-digit code                                                                                                                                                                                                                       |
+| `/whois <user>`                                         | Mods          | Look up which UMN email a member verified with                                                                                                                                                                                                |
+| `/whois-audit`                                          | Server admins | Show recent `/whois` lookups grouped by moderator                                                                                                                                                                                             |
+| `/forget-me`                                            | Everyone      | Delete your verification record and remove verified roles                                                                                                                                                                                     |
 
 Most users go through the panel's **Start verification** / **Submit
 code** buttons rather than the slash commands directly.
