@@ -31,6 +31,8 @@ const buttonHandlers = {
   umn_verify_code_prompt: buttons.handleCodePrompt,
   forget_me_cancel: buttons.handleForgetMeCancel,
   forget_me_confirm: buttons.handleForgetMeConfirm,
+  grandfather_cancel: buttons.handleGrandfatherCancel,
+  grandfather_confirm: buttons.handleGrandfatherConfirm,
 };
 
 const modalHandlers = {
