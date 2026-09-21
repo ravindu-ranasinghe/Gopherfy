@@ -1,3 +1,5 @@
+const { Collection } = require('discord.js');
+
 /**
  * Mock factories for discord.js interaction objects.
  *
@@ -93,22 +95,50 @@ function createMockModalInteraction({ customId, fieldValues = {}, ...rest } = {}
   };
 }
 
-function createMockMember({ rolesArr = [], remove = jest.fn().mockResolvedValue() } = {}) {
+/**
+ * `rolesArr` is a list of role ids the member already holds; `hasRole` is
+ * sugar for the single-role case. `roles.cache` is a real Collection so
+ * production code can call `.has(roleId)` on it.
+ */
+function createMockMember({
+  id = 'member1',
+  rolesArr = [],
+  remove = jest.fn().mockResolvedValue(),
+  add = jest.fn().mockResolvedValue(),
+  isBot = false,
+  hasRole,
+} = {}) {
+  const roleIds = hasRole ? [...rolesArr, hasRole] : rolesArr;
   return {
+    id,
+    user: { id, bot: isBot },
     roles: {
-      add: jest.fn().mockResolvedValue(),
+      add,
       remove,
-      cache: rolesArr,
+      cache: new Collection(roleIds.map((roleId) => [roleId, { id: roleId }])),
     },
   };
 }
 
-function createMockGuild({
-  id = 'guild1',
-  members = { fetch: jest.fn() },
-  ownerId = 'owner',
-} = {}) {
-  return { id, members, ownerId };
+/**
+ * `memberList` seeds the no-arg `guild.members.fetch()` used by the
+ * full-guild backfill; pass `members` to stub the manager outright.
+ */
+function createMockGuild({ id = 'guild1', members, memberList = [], ownerId = 'owner' } = {}) {
+  return {
+    id,
+    ownerId,
+    memberCount: memberList.length,
+    members: members ?? {
+      fetch: jest
+        .fn()
+        .mockResolvedValue(new Collection(memberList.map((m, i) => [m.id ?? `m${i}`, m]))),
+      fetchMe: jest.fn().mockResolvedValue({
+        roles: { highest: { position: 100 } },
+        permissions: { has: () => true },
+      }),
+    },
+  };
 }
 
 function createMockDb(overrides = {}) {
