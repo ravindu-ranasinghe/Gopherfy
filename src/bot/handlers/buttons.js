@@ -1,4 +1,15 @@
-const { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const {
+  ActionRowBuilder,
+  MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} = require('discord.js');
+const { grandfatherMembers } = require('../grandfather');
+
+// Discord rate-limits message edits; report progress in chunks rather than
+// once per member.
+const PROGRESS_EVERY = 100;
 
 async function handleVerifyStart(interaction) {
   const modal = new ModalBuilder()
@@ -76,9 +87,87 @@ async function handleForgetMeConfirm(interaction, deps) {
   });
 }
 
+async function handleGrandfatherCancel(interaction) {
+  return interaction.update({ content: 'Cancelled. Setup is still complete.', components: [] });
+}
+
+/**
+ * Confirm-side of /setup grandfather-existing: grant the guild's verified
+ * role to every current member. Nothing is written to the verified
+ * database -- this only papers over the role in this one guild.
+ *
+ * The button carries no state: anyone who can see the setup reply can click
+ * it, so the Administrator check is re-run here and the role is re-read from
+ * guild config rather than trusted from the customId.
+ */
+async function handleGrandfatherConfirm(interaction, deps) {
+  const { db, log } = deps;
+
+  if (!interaction.memberPermissions || !interaction.memberPermissions.has('Administrator')) {
+    return interaction.reply({
+      content: '❌ Only server administrators can run the backfill.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const roleId = db.getGuildConfig(interaction.guild.id)?.verified_role_id;
+  if (!roleId) {
+    return interaction.update({
+      content: "❌ This server's configuration is gone. Run `/setup` again before backfilling.",
+      components: [],
+    });
+  }
+
+  // Acknowledge and drop the buttons in one edit so the backfill cannot be
+  // started twice by a double-click.
+  await interaction.update({
+    content: `⏳ Granting <@&${roleId}> to existing members…`,
+    components: [],
+  });
+
+  let reportedAt = 0;
+  const onProgress = (progress) => {
+    const { processed = 0 } = progress ?? {};
+    if (processed - reportedAt < PROGRESS_EVERY) return;
+    reportedAt = processed;
+    // The interaction token expires ~15 min after the first response; a dead
+    // token must not take the backfill down with it.
+    interaction
+      .editReply({
+        content: `⏳ Granting <@&${roleId}> to existing members… ${processed} processed.`,
+        components: [],
+      })
+      .catch(() => {});
+  };
+
+  // ponytail: sequential adds, ~15min token ceiling; move to a background job if servers get large enough to need it.
+  let result;
+  try {
+    result = await grandfatherMembers({ guild: interaction.guild, roleId, log, onProgress });
+  } catch (err) {
+    log.error({ err, guildId: interaction.guild.id }, 'grandfather: backfill failed');
+    return interaction
+      .editReply({
+        content: '❌ The backfill failed partway through. Re-run `/setup` to try again.',
+        components: [],
+      })
+      .catch(() => {});
+  }
+
+  const { granted = 0, skipped = 0, failed = 0 } = result ?? {};
+  return interaction
+    .editReply({
+      content: `✅ Backfill complete — granted ${granted}, skipped ${skipped}, failed ${failed}. Nobody was added to the verified database.`,
+      components: [],
+    })
+    .catch(() => {});
+}
+
 module.exports = {
   handleVerifyStart,
   handleCodePrompt,
   handleForgetMeCancel,
   handleForgetMeConfirm,
+  handleGrandfatherCancel,
+  handleGrandfatherConfirm,
 };
