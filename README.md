@@ -6,14 +6,6 @@ A Discord verification bot that confirms a member owns a real `@umn.edu`
 email address, remembers them, and auto-assigns the "verified" role in
 any server running Gopherfy where that member shows up later.
 
-Built by **Eric He** and **Ravindu Ranasinghe**, and **Ritesh Prabhu**.
-
-## Secret scanning (GitHub)
-
-Enable **Secret scanning** (and push protection if available) for this
-repository: **Settings → Code security and analysis**. See
-[About secret scanning](https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning).
-CI also runs **gitleaks** on every workflow.
 
 ## What it does
 
