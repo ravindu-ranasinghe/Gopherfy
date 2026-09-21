@@ -6,7 +6,6 @@ A Discord verification bot that confirms a member owns a real `@umn.edu`
 email address, remembers them, and auto-assigns the "verified" role in
 any server running Gopherfy where that member shows up later.
 
-
 ## What it does
 
 When someone joins a Discord server running Gopherfy, they start with no
