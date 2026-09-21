@@ -66,6 +66,13 @@ const commands = [
         description: 'Role to assign after verification (e.g. Verified Gopher)',
         required: true,
       },
+      {
+        type: 5, // BOOLEAN
+        name: 'grandfather-existing',
+        description:
+          'Give every current member the verified role (does NOT add them to the verified database)',
+        required: false,
+      },
     ],
   },
 ];
