@@ -92,7 +92,7 @@ async function handleGrandfatherCancel(interaction) {
 }
 
 /**
- * Confirm-side of /setup grandfather-existing: grant the guild's verified
+ * Confirm-side of /setup role-all-members: grant the guild's verified
  * role to every current member. Nothing is written to the verified
  * database -- this only papers over the role in this one guild.
  *

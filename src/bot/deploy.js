@@ -68,7 +68,7 @@ const commands = [
       },
       {
         type: 5, // BOOLEAN
-        name: 'grandfather-existing',
+        name: 'role-all-members',
         description:
           'Give every current member the verified role (does NOT add them to the verified database)',
         required: false,

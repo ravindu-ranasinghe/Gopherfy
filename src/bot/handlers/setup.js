@@ -10,7 +10,7 @@ const {
  * /setup -- admin-only first-time guild configuration. Stores the
  * verified role on guild_config so verifyer/code handlers can grant it.
  *
- * The optional grandfather-existing flag offers a one-shot backfill that
+ * The optional role-all-members flag offers a one-shot backfill that
  * grants the verified role to everyone already in the guild. Setup itself
  * always completes first; the backfill is only ever offered, never run
  * here -- the buttons hand off to grandfather_confirm / grandfather_cancel.
@@ -26,7 +26,7 @@ async function handle(interaction, deps) {
   }
 
   const verifiedRole = interaction.options.getRole('verified-role');
-  const grandfatherExisting = interaction.options.getBoolean('grandfather-existing');
+  const roleAllMembers = interaction.options.getBoolean('role-all-members');
 
   // fetchMe() is a network call — defer before it to stay within Discord's 3s window.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -48,7 +48,7 @@ async function handle(interaction, deps) {
 
   const successContent = `✅ **Setup complete!**\n- Verified role: <@&${verifiedRole.id}>\n- Everyone else remains under \`@everyone\` permissions until verified.\n\nPost a verification panel with \`/verify-panel\``;
 
-  if (!grandfatherExisting) {
+  if (!roleAllMembers) {
     return interaction.editReply({ content: successContent });
   }
 
@@ -56,7 +56,7 @@ async function handle(interaction, deps) {
   // hand out the role, so say so rather than offering a button that fails.
   if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
     return interaction.editReply({
-      content: `${successContent}\n\n⚠️ I can't grant the role to existing members — I'm missing the **Manage Roles** permission. Grant it and run \`/setup\` again with \`grandfather-existing: true\`.`,
+      content: `${successContent}\n\n⚠️ I can't grant the role to existing members — I'm missing the **Manage Roles** permission. Grant it and run \`/setup\` again with \`role-all-members: true\`.`,
     });
   }
 
